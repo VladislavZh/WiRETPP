@@ -1,0 +1,8 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+numpy==2.3.5
+pandas==2.2.3
+torch==2.12.0
+omegaconf==2.3.0
+PyYAML==6.0.3
+packaging==26.2

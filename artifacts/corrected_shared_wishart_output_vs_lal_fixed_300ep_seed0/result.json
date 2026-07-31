@@ -1,0 +1,19 @@
+{
+  "status": "pass",
+  "runtime_seconds": 1032.1574428081512,
+  "architectures": [
+    "nhp",
+    "thp",
+    "cotic"
+  ],
+  "parameterizations": [
+    "output_split",
+    "lal_fixed"
+  ],
+  "encoder_instances_per_model": 1,
+  "output_split_expands_only_final_head": true,
+  "lal_fixed_uses_random_walk": false,
+  "uses_local_w_parameters": false,
+  "uses_test_time_w_optimization": false,
+  "uses_elbo": false
+}

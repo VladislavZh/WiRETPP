@@ -1,0 +1,29 @@
+{
+  "parameter_seed": 20260746,
+  "simulation_seed": 20260747,
+  "split_seed": 20260748,
+  "horizon": 9.4,
+  "n_sequences": 1200,
+  "generated_per_class": 400,
+  "used_per_class": 400,
+  "unused_per_class": 0,
+  "mean_event_count": 49.76833333333333,
+  "sd_event_count": 22.29100127488863,
+  "minimum_event_count": 4,
+  "maximum_event_count": 151,
+  "mean_event_count_by_class": [
+    47.7275,
+    37.31,
+    64.2675
+  ],
+  "spectral_radius_by_class": [
+    1.1908595644982058,
+    1.6444142297826359,
+    1.4417914785559482
+  ],
+  "actual_split_sizes": {
+    "train": 90,
+    "validation": 45,
+    "test": 1065
+  }
+}

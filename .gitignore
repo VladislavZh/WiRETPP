@@ -1,0 +1,5 @@
+.venv/
+.mplconfig/
+__pycache__/
+*.py[cod]
+

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shared-wishart-tpp"
+version = "0.1.0"
+description = "Shared-encoder latent-Wishart mixtures for neural temporal point processes"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "numpy==2.3.5",
+  "pandas==2.2.3",
+  "torch==2.12.0",
+  "easy-tpp==0.2.1",
+  "omegaconf==2.3.0",
+  "PyYAML==6.0.3",
+  "packaging==26.2",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
