@@ -240,6 +240,63 @@ class ReferenceNHPOutputMixture(ReferenceHistoryMixture):
             self.n_marks,
         )[..., component_index, :]
 
+    def prune_component(self, component_index: int) -> tuple[int, ...]:
+        """Physically remove one mixture logit and its C-output block."""
+
+        if self.n_components <= 1:
+            raise ValueError("cannot prune the final mixture component")
+        if not 0 <= component_index < self.n_components:
+            raise IndexError("component index out of range")
+        kept_components = tuple(
+            index
+            for index in range(self.n_components)
+            if index != component_index
+        )
+        kept_outputs = torch.as_tensor(
+            [
+                component * self.n_marks + mark
+                for component in kept_components
+                for mark in range(self.n_marks)
+            ],
+            dtype=torch.int64,
+            device=self.device,
+        )
+        new_dimension = len(kept_components) * self.n_marks
+        old_linear = self.intensity_linear
+        new_linear = nn.Linear(
+            old_linear.in_features,
+            new_dimension,
+            device=self.device,
+            dtype=self.dtype,
+        )
+        new_link = ScaledSoftplus(
+            new_dimension,
+            dtype=self.dtype,
+        ).to(self.device)
+        with torch.no_grad():
+            new_linear.weight.copy_(
+                old_linear.weight.index_select(0, kept_outputs)
+            )
+            new_linear.bias.copy_(
+                old_linear.bias.index_select(0, kept_outputs)
+            )
+            new_link.raw_scale.copy_(
+                self.intensity_link.raw_scale.index_select(0, kept_outputs)
+            )
+            old_weights = torch.softmax(self.mixture_logits, dim=0)
+            kept_index = torch.as_tensor(
+                kept_components,
+                dtype=torch.int64,
+                device=self.device,
+            )
+            kept_weights = old_weights.index_select(0, kept_index)
+            new_logits = torch.log(kept_weights / kept_weights.sum())
+        self.intensity_linear = new_linear
+        self.intensity_link = new_link
+        self.mixture_logits = nn.Parameter(new_logits.detach().clone())
+        self.n_components = len(kept_components)
+        return kept_components
+
 
 class ReferenceTHPOutputMixture(ReferenceHistoryMixture):
     """One EasyTPP THP encoder and one ``hidden -> K*C`` THP head."""
@@ -347,6 +404,76 @@ class ReferenceTHPOutputMixture(ReferenceHistoryMixture):
             )
             self.softplus.log_beta.copy_(source_beta.repeat(n_components))
 
+    def expand_components(
+        self,
+        n_components: int,
+        *,
+        noise_scale: float = 0.01,
+        initialization_seed: int = 0,
+    ) -> None:
+        """Clone a fitted K=1 THP output while preserving its encoder."""
+
+        if self.n_components != 1:
+            raise ValueError("component expansion requires a fitted K=1 head")
+        if n_components <= 1:
+            raise ValueError("expanded component count must exceed one")
+        if noise_scale < 0.0:
+            raise ValueError("output noise scale must be non-negative")
+        old_linear = self.layer_intensity_hidden
+        output_count = n_components * self.n_marks
+        new_linear = nn.Linear(
+            old_linear.in_features,
+            output_count,
+            device=self.device,
+            dtype=self.dtype,
+        )
+        new_softplus = EasyTPPScaledSoftplus(output_count).to(
+            device=self.device,
+            dtype=self.dtype,
+        )
+        generator = torch.Generator(device=self.device)
+        generator.manual_seed(initialization_seed)
+
+        def expanded(values: Tensor) -> Tensor:
+            copies = values.detach().repeat(n_components, *(
+                1 for _ in range(values.ndim - 1)
+            ))
+            if noise_scale > 0.0:
+                noise = torch.randn(
+                    copies.shape,
+                    dtype=copies.dtype,
+                    device=copies.device,
+                    generator=generator,
+                )
+                noise[: self.n_marks].zero_()
+                copies = copies + noise_scale * noise
+            return copies
+
+        with torch.no_grad():
+            new_linear.weight.copy_(expanded(old_linear.weight))
+            new_linear.bias.copy_(expanded(old_linear.bias))
+            new_base = expanded(
+                self.factor_intensity_base.reshape(self.n_marks)
+            )[None]
+            new_decay = expanded(
+                self.factor_intensity_decay.reshape(self.n_marks)
+            )[None]
+            new_softplus.log_beta.copy_(
+                self.softplus.log_beta.detach().repeat(n_components)
+            )
+        self.layer_intensity_hidden = new_linear
+        self.factor_intensity_base = nn.Parameter(new_base)
+        self.factor_intensity_decay = nn.Parameter(new_decay)
+        self.softplus = new_softplus
+        self.mixture_logits = nn.Parameter(
+            torch.zeros(
+                n_components,
+                dtype=self.dtype,
+                device=self.device,
+            )
+        )
+        self.n_components = int(n_components)
+
     def _bos_type(self) -> int:
         return self.n_marks
 
@@ -396,6 +523,75 @@ class ReferenceTHPOutputMixture(ReferenceHistoryMixture):
             self.n_components,
             self.n_marks,
         )[..., component_index, :]
+
+    def prune_component(self, component_index: int) -> tuple[int, ...]:
+        """Physically remove one mixture logit and its C-output block."""
+
+        if self.n_components <= 1:
+            raise ValueError("cannot prune the final mixture component")
+        if not 0 <= component_index < self.n_components:
+            raise IndexError("component index out of range")
+        kept_components = tuple(
+            index
+            for index in range(self.n_components)
+            if index != component_index
+        )
+        kept_outputs = torch.as_tensor(
+            [
+                component * self.n_marks + mark
+                for component in kept_components
+                for mark in range(self.n_marks)
+            ],
+            dtype=torch.int64,
+            device=self.device,
+        )
+        new_dimension = len(kept_components) * self.n_marks
+        old_linear = self.layer_intensity_hidden
+        new_linear = nn.Linear(
+            old_linear.in_features,
+            new_dimension,
+            device=self.device,
+            dtype=self.dtype,
+        )
+        new_softplus = EasyTPPScaledSoftplus(new_dimension).to(
+            device=self.device,
+            dtype=self.dtype,
+        )
+        with torch.no_grad():
+            new_linear.weight.copy_(
+                old_linear.weight.index_select(0, kept_outputs)
+            )
+            new_linear.bias.copy_(
+                old_linear.bias.index_select(0, kept_outputs)
+            )
+            new_softplus.log_beta.copy_(
+                self.softplus.log_beta.index_select(0, kept_outputs)
+            )
+            old_weights = torch.softmax(self.mixture_logits, dim=0)
+            kept_weights = old_weights[
+                torch.as_tensor(
+                    kept_components,
+                    dtype=torch.int64,
+                    device=self.device,
+                )
+            ]
+            kept_weights = kept_weights / kept_weights.sum()
+            new_logits = torch.log(kept_weights)
+            new_base = self.factor_intensity_base.index_select(
+                1, kept_outputs
+            )
+            new_decay = self.factor_intensity_decay.index_select(
+                1, kept_outputs
+            )
+        self.layer_intensity_hidden = new_linear
+        self.factor_intensity_base = nn.Parameter(new_base.detach().clone())
+        self.factor_intensity_decay = nn.Parameter(
+            new_decay.detach().clone()
+        )
+        self.softplus = new_softplus
+        self.mixture_logits = nn.Parameter(new_logits.detach().clone())
+        self.n_components = len(kept_components)
+        return kept_components
 
 
 class ReferenceCOTICOutputMixture(ReferenceHistoryMixture):
@@ -449,6 +645,82 @@ class ReferenceCOTICOutputMixture(ReferenceHistoryMixture):
                 num_types=n_components * n_marks,
             )
 
+    def expand_components(
+        self,
+        n_components: int,
+        *,
+        noise_scale: float = 0.01,
+        initialization_seed: int = 0,
+    ) -> None:
+        """Clone a fitted K=1 output block without changing the encoder.
+
+        The COTIC reference head initializes its intensity scale from the
+        total number of output channels.  Constructing a ``K*C`` head from
+        scratch therefore changes the inner intensity law as K changes.  A
+        post-pretraining expansion instead preserves the fitted C-channel
+        scale in every cloned component and perturbs only the affine output
+        maps to break symmetry.
+        """
+
+        if self.n_components != 1:
+            raise ValueError("component expansion requires a fitted K=1 head")
+        if n_components <= 1:
+            raise ValueError("expanded component count must exceed one")
+        if noise_scale < 0.0:
+            raise ValueError("output noise scale must be non-negative")
+        old_layer = self.intensity_head.layer
+        output_count = n_components * self.n_marks
+        new_layer = nn.Linear(
+            old_layer.in_features,
+            output_count,
+            device=self.device,
+            dtype=self.dtype,
+        )
+        generator = torch.Generator(device=self.device)
+        generator.manual_seed(initialization_seed)
+        with torch.no_grad():
+            weights = old_layer.weight.detach().repeat(n_components, 1)
+            biases = old_layer.bias.detach().repeat(n_components)
+            if noise_scale > 0.0:
+                weight_noise = torch.randn(
+                    weights.shape,
+                    dtype=weights.dtype,
+                    device=weights.device,
+                    generator=generator,
+                )
+                bias_noise = torch.randn(
+                    biases.shape,
+                    dtype=biases.dtype,
+                    device=biases.device,
+                    generator=generator,
+                )
+                # Keep component zero as the exact pretrained process and
+                # perturb only its overcomplete siblings.
+                weight_noise[: self.n_marks].zero_()
+                bias_noise[: self.n_marks].zero_()
+                weights.add_(noise_scale * weight_noise)
+                biases.add_(noise_scale * bias_noise)
+            new_layer.weight.copy_(weights)
+            new_layer.bias.copy_(biases)
+            new_softplus_params = (
+                self.intensity_head.softplus_params.detach().repeat(
+                    1, 1, n_components
+                )
+            )
+        self.intensity_head.layer = new_layer
+        self.intensity_head.softplus_params = nn.Parameter(
+            new_softplus_params.clone()
+        )
+        self.intensity_head.num_types = output_count
+        self.mixture_logits = nn.Parameter(
+            torch.zeros(
+                n_components,
+                dtype=self.dtype,
+                device=self.device,
+            )
+        )
+        self.n_components = int(n_components)
+
     def _bos_type(self) -> int:
         return self.n_marks + 1
 
@@ -492,3 +764,59 @@ class ReferenceCOTICOutputMixture(ReferenceHistoryMixture):
             self.n_components,
             self.n_marks,
         )[..., component_index, :]
+
+    def prune_component(self, component_index: int) -> tuple[int, ...]:
+        """Physically remove one mixture logit and its C-output block."""
+
+        if self.n_components <= 1:
+            raise ValueError("cannot prune the final mixture component")
+        if not 0 <= component_index < self.n_components:
+            raise IndexError("component index out of range")
+        kept_components = tuple(
+            index
+            for index in range(self.n_components)
+            if index != component_index
+        )
+        kept_outputs = torch.as_tensor(
+            [
+                component * self.n_marks + mark
+                for component in kept_components
+                for mark in range(self.n_marks)
+            ],
+            dtype=torch.int64,
+            device=self.device,
+        )
+        old_layer = self.intensity_head.layer
+        new_layer = nn.Linear(
+            old_layer.in_features,
+            len(kept_outputs),
+            device=self.device,
+            dtype=self.dtype,
+        )
+        with torch.no_grad():
+            new_layer.weight.copy_(
+                old_layer.weight.index_select(0, kept_outputs)
+            )
+            new_layer.bias.copy_(
+                old_layer.bias.index_select(0, kept_outputs)
+            )
+            new_softplus_params = (
+                self.intensity_head.softplus_params.index_select(
+                    2, kept_outputs
+                )
+            )
+            old_weights = torch.softmax(self.mixture_logits, dim=0)
+            kept_index = torch.as_tensor(
+                kept_components,
+                dtype=torch.int64,
+                device=self.device,
+            )
+            kept_weights = old_weights.index_select(0, kept_index)
+            new_logits = torch.log(kept_weights / kept_weights.sum())
+        self.intensity_head.layer = new_layer
+        self.intensity_head.softplus_params = nn.Parameter(
+            new_softplus_params.detach().clone()
+        )
+        self.mixture_logits = nn.Parameter(new_logits.detach().clone())
+        self.n_components = len(kept_components)
+        return kept_components

@@ -9,7 +9,6 @@ from torch import Tensor
 from lal_wishart.data.hawkes_branching import MarkedSequence
 from lal_wishart.models.latent_wishart_attention_nhp import (
     LatentWishartAttentionNHP,
-    sampled_nhp_component_scores,
 )
 from lal_wishart.models.reference_history_mixtures import (
     ReferenceHistoryMixture,
@@ -51,7 +50,7 @@ class LatentWishartAttentionHistory(LatentWishartAttentionNHP):
             n_samples,
             sample_seed=sample_seed,
         )
-        scores = sampled_nhp_component_scores(trace, matrices)
+        scores = self.component_scores_from_trace(trace, matrices)
         gates = cluster_log_weights_from_matrices(
             matrices,
             n_components=self.n_components,

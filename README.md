@@ -12,6 +12,24 @@ Wishart). Предыдущие grid-, GP-Wishart-, MAP-​W-, Wishart-only- и r
 Там находятся конфигурация, все 12 чекпойнтов, истории обучения, posterior
 probabilities, learned Wishart means, сырые метрики и SHA-256 manifest.
 
+## Сводный протокол экспериментов 2026-08-07
+
+Полная ретроспектива экспериментов, corrected all-12 benchmark, точный алгоритм
+обучения, фактически применённые метапараметры, обоснование всех составных
+частей и разбор отрицательных результатов собраны в итоговом протоколе:
+
+- [PDF-отчёт](output/pdf/wire_tpp_experiment_protocol_all12_20260807.pdf);
+- [LaTeX-исходник](output/pdf/wire_tpp_experiment_protocol_all12_20260807.tex).
+
+Протокол охватывает 144 запуска corrected all-12 по трём seeds, последующие
+THP/COTIC ablations, frozen-backbone и alpha sweeps, matched Wishart-effect DGP,
+обучаемую степень свободы `nu` и Monte Carlo ablations. Главный вывод
+отрицательный: устойчивое общее преимущество Signed-Wishart по кластеризации не
+подтверждено; небольшой средний выигрыш COTIC зависит от backbone и seed, а THP
+в среднем немного уступает no-W. В отчёте отдельно отмечено расхождение между
+исторической metadata `backbone_learning_rate=1e-5` и фактическим общим neural
+optimizer с LR `1e-3`, зафиксированным в `history`/`progress`.
+
 ## Что именно сравнивается
 
 Данные имеют (K=3) скрытых класса и (C=5) типов событий. Для каждой из

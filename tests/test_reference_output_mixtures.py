@@ -120,6 +120,194 @@ class ReferenceOutputMixtureTests(unittest.TestCase):
             full = base_nhp_component_scores_from_trace(trace)
             torch.testing.assert_close(prefix + suffix, full)
 
+    def test_thp_and_cotic_use_each_paths_own_horizon(self) -> None:
+        sample = (
+            MarkedSequence(
+                times=np.array([0.2, 0.7]),
+                marks=np.array([0, 1], dtype=np.int64),
+                horizon=0.7,
+            ),
+            MarkedSequence(
+                times=np.array([0.1, 0.4, 1.4]),
+                marks=np.array([1, 0, 1], dtype=np.int64),
+                horizon=1.4,
+            ),
+        )
+        models = (
+            ReferenceTHPOutputMixture(
+                3,
+                2,
+                horizon=1.4,
+                hidden_size=8,
+                num_layers=1,
+                num_heads=2,
+                dropout=0.0,
+                quadrature_order=4,
+                initialization_seed=421,
+            ),
+            ReferenceCOTICOutputMixture(
+                3,
+                2,
+                horizon=1.4,
+                input_channels=4,
+                hidden_size=8,
+                num_layers=2,
+                kernel_size=3,
+                dropout=0.0,
+                quadrature_order=4,
+                initialization_seed=422,
+            ),
+        )
+        for model in models:
+            batched = model.component_scores(sample)
+            individual = torch.cat(
+                tuple(model.component_scores((sequence,)) for sequence in sample),
+                dim=0,
+            )
+            torch.testing.assert_close(batched, individual)
+            trace = model.build_trace(sample)
+            self.assertEqual(trace.event_times.numel(), 5)
+            torch.testing.assert_close(
+                trace.path_horizons,
+                torch.tensor([0.7, 1.4], dtype=trace.path_horizons.dtype),
+            )
+
+    def test_thp_pruning_preserves_surviving_scores_and_weights(self) -> None:
+        model = self.output_models()[1]
+        model.eval()
+        with torch.no_grad():
+            model.mixture_logits.copy_(torch.tensor([0.7, -0.2, 1.1]))
+            scores_before = model.component_scores(self.sequences())
+            weights_before = torch.softmax(model.mixture_logits, dim=0)
+        kept = model.prune_component(1)
+        self.assertEqual(kept, (0, 2))
+        self.assertEqual(model.n_components, 2)
+        self.assertEqual(model.layer_intensity_hidden.out_features, 4)
+        self.assertEqual(tuple(model.factor_intensity_base.shape), (1, 4))
+        self.assertEqual(tuple(model.softplus.log_beta.shape), (4,))
+        with torch.no_grad():
+            scores_after = model.component_scores(self.sequences())
+            weights_after = torch.softmax(model.mixture_logits, dim=0)
+        torch.testing.assert_close(scores_after, scores_before[:, [0, 2]])
+        expected_weights = weights_before[[0, 2]]
+        expected_weights = expected_weights / expected_weights.sum()
+        torch.testing.assert_close(weights_after, expected_weights)
+
+    def test_nhp_pruning_preserves_surviving_scores_and_weights(self) -> None:
+        model = self.output_models()[0]
+        model.eval()
+        with torch.no_grad():
+            model.mixture_logits.copy_(torch.tensor([0.7, -0.2, 1.1]))
+            scores_before = model.component_scores(self.sequences())
+            weights_before = torch.softmax(model.mixture_logits, dim=0)
+        kept = model.prune_component(1)
+        self.assertEqual(kept, (0, 2))
+        self.assertEqual(model.n_components, 2)
+        self.assertEqual(model.intensity_linear.out_features, 4)
+        self.assertEqual(tuple(model.intensity_link.raw_scale.shape), (4,))
+        with torch.no_grad():
+            scores_after = model.component_scores(self.sequences())
+            weights_after = torch.softmax(model.mixture_logits, dim=0)
+        torch.testing.assert_close(scores_after, scores_before[:, [0, 2]])
+        expected_weights = weights_before[[0, 2]]
+        expected_weights = expected_weights / expected_weights.sum()
+        torch.testing.assert_close(weights_after, expected_weights)
+
+    def test_cotic_pruning_preserves_surviving_scores_and_weights(self) -> None:
+        model = self.output_models()[2]
+        model.eval()
+        with torch.no_grad():
+            model.mixture_logits.copy_(torch.tensor([0.7, -0.2, 1.1]))
+            scores_before = model.component_scores(self.sequences())
+            weights_before = torch.softmax(model.mixture_logits, dim=0)
+        kept = model.prune_component(1)
+        self.assertEqual(kept, (0, 2))
+        self.assertEqual(model.n_components, 2)
+        self.assertEqual(model.intensity_head.layer.out_features, 4)
+        self.assertEqual(
+            tuple(model.intensity_head.softplus_params.shape), (1, 1, 4)
+        )
+        with torch.no_grad():
+            scores_after = model.component_scores(self.sequences())
+            weights_after = torch.softmax(model.mixture_logits, dim=0)
+        torch.testing.assert_close(scores_after, scores_before[:, [0, 2]])
+        expected_weights = weights_before[[0, 2]]
+        expected_weights = expected_weights / expected_weights.sum()
+        torch.testing.assert_close(weights_after, expected_weights)
+
+    def test_cotic_k1_expansion_preserves_scale_and_encoder(self) -> None:
+        model = ReferenceCOTICOutputMixture(
+            1,
+            2,
+            horizon=1.0,
+            input_channels=4,
+            hidden_size=8,
+            num_layers=2,
+            kernel_size=3,
+            dropout=0.0,
+            quadrature_order=4,
+            initialization_seed=423,
+        )
+        model.eval()
+        encoder_before = {
+            name: parameter.detach().clone()
+            for name, parameter in model.encoder.named_parameters()
+        }
+        scale_before = model.intensity_head.softplus_params.detach().clone()
+        score_before = model.component_scores(self.sequences())[:, 0]
+        model.expand_components(
+            4, noise_scale=0.0, initialization_seed=424
+        )
+        self.assertEqual(model.n_components, 4)
+        self.assertEqual(model.intensity_head.layer.out_features, 8)
+        self.assertEqual(model.intensity_head.num_types, 8)
+        torch.testing.assert_close(
+            model.intensity_head.softplus_params,
+            scale_before.repeat(1, 1, 4),
+        )
+        for name, parameter in model.encoder.named_parameters():
+            torch.testing.assert_close(parameter, encoder_before[name])
+        scores_after = model.component_scores(self.sequences())
+        torch.testing.assert_close(
+            scores_after,
+            score_before[:, None].expand(-1, 4),
+        )
+
+    def test_thp_k1_expansion_preserves_scale_and_encoder(self) -> None:
+        model = ReferenceTHPOutputMixture(
+            1,
+            2,
+            horizon=1.0,
+            hidden_size=8,
+            num_layers=1,
+            num_heads=2,
+            dropout=0.0,
+            quadrature_order=4,
+            initialization_seed=425,
+        )
+        model.eval()
+        encoder_before = {
+            name: parameter.detach().clone()
+            for name, parameter in model.backbone.named_parameters()
+        }
+        scale_before = model.softplus.log_beta.detach().clone()
+        score_before = model.component_scores(self.sequences())[:, 0]
+        model.expand_components(
+            4, noise_scale=0.0, initialization_seed=426
+        )
+        self.assertEqual(model.n_components, 4)
+        self.assertEqual(model.layer_intensity_hidden.out_features, 8)
+        torch.testing.assert_close(
+            model.softplus.log_beta, scale_before.repeat(4)
+        )
+        for name, parameter in model.backbone.named_parameters():
+            torch.testing.assert_close(parameter, encoder_before[name])
+        scores_after = model.component_scores(self.sequences())
+        torch.testing.assert_close(
+            scores_after,
+            score_before[:, None].expand(-1, 4),
+        )
+
     def test_k1_thp_and_cotic_match_reference_architectures(self) -> None:
         output_thp = ReferenceTHPOutputMixture(
             1,

@@ -62,6 +62,7 @@ class ReferenceNeuralHawkesMixture(NeuralHawkesMixture):
         ):
             raise IndexError("component index out of range")
         times, marks, mask = self._prepare_sequence_batch(sequence_list)
+        horizons = self._sequence_horizons(sequence_list)
         index = torch.as_tensor(
             indices,
             dtype=torch.int64,
@@ -181,7 +182,7 @@ class ReferenceNeuralHawkesMixture(NeuralHawkesMixture):
             )
 
         compensator = compensator + integrate(
-            self.horizon - previous_time,
+            horizons - previous_time,
             state,
         )
         return event_term - compensator

@@ -107,6 +107,44 @@ class NeuralHawkesTests(unittest.TestCase):
         )
         self.assertAlmostEqual(float(score.detach()), expected, places=9)
 
+    def test_variable_horizons_preserve_last_event_and_compensator_endpoint(self) -> None:
+        model = NeuralHawkesMixture(
+            1,
+            2,
+            horizon=2.0,
+            hidden_size=6,
+            quadrature_order=8,
+            initialization_seed=47,
+        )
+        rates = torch.tensor([0.4, 0.7], dtype=torch.float64)
+        with torch.no_grad():
+            model.intensity_linear.weight.zero_()
+            model.intensity_link.raw_scale.fill_(
+                inverse_softplus(1.0 - model.intensity_link.minimum_scale)
+            )
+            model.intensity_linear.bias.copy_(torch.log(torch.expm1(rates)))
+        sample = (
+            MarkedSequence(
+                times=np.array([0.2, 0.7]),
+                marks=np.array([0, 0], dtype=np.int64),
+                horizon=0.7,
+            ),
+            MarkedSequence(
+                times=np.array([0.3]),
+                marks=np.array([1], dtype=np.int64),
+                horizon=1.5,
+            ),
+        )
+        observed = model.component_scores(sample)[:, 0]
+        expected = torch.tensor(
+            [
+                2.0 * math.log(0.4) - 0.7 * 1.1,
+                math.log(0.7) - 1.5 * 1.1,
+            ],
+            dtype=torch.float64,
+        )
+        torch.testing.assert_close(observed, expected, rtol=1e-9, atol=1e-9)
+
     def test_empty_sequence_is_negative_compensator(self) -> None:
         model = self.model(components=1)
         trace = model.component_trace(sequences()[-1], 0)

@@ -366,8 +366,6 @@ class NeuralHawkesMixture(nn.Module):
         sequence: MarkedSequence,
         component_index: int,
     ) -> NHPComponentTrace:
-        if not math.isclose(sequence.horizon, self.horizon, abs_tol=1e-10):
-            raise ValueError("sequence horizon does not match model horizon")
         if np.any((sequence.marks < 0) | (sequence.marks >= self.n_marks)):
             raise ValueError("sequence contains an invalid event mark")
 
@@ -414,7 +412,7 @@ class NeuralHawkesMixture(nn.Module):
             state,
             component_index=component_index,
             start_time=previous_time,
-            interval_length=self.horizon - previous_time,
+            interval_length=sequence.horizon - previous_time,
         )
         quadrature_times.append(q_times)
         quadrature_weights.append(q_weights)
@@ -466,8 +464,11 @@ class NeuralHawkesMixture(nn.Module):
         ):
             raise IndexError("component index out of range")
         times, marks, mask = self._prepare_sequence_batch(sequence_list)
+        horizons = self._sequence_horizons(sequence_list)
         component_rows = [
-            self._batched_component_score(times, marks, mask, component)
+            self._batched_component_score(
+                times, marks, mask, horizons, component
+            )
             for component in indices
         ]
         return torch.stack(component_rows, dim=1)
@@ -478,11 +479,6 @@ class NeuralHawkesMixture(nn.Module):
     ) -> tuple[Tensor, Tensor, Tensor]:
         if not sequence_list:
             raise ValueError("sequences must be non-empty")
-        if any(
-            not math.isclose(sequence.horizon, self.horizon, abs_tol=1e-10)
-            for sequence in sequence_list
-        ):
-            raise ValueError("sequence horizon does not match model horizon")
         if any(
             np.any(
                 (sequence.marks < 0)
@@ -496,7 +492,7 @@ class NeuralHawkesMixture(nn.Module):
         maximum_events = max(sequence.count for sequence in sequence_list)
         times = torch.full(
             (batch_size, maximum_events),
-            self.horizon,
+            0.0,
             dtype=self.dtype,
             device=self.device,
         )
@@ -526,11 +522,22 @@ class NeuralHawkesMixture(nn.Module):
                 mask[row, :count] = True
         return times, marks, mask
 
+    def _sequence_horizons(
+        self,
+        sequence_list: tuple[MarkedSequence, ...],
+    ) -> Tensor:
+        return torch.as_tensor(
+            [sequence.horizon for sequence in sequence_list],
+            dtype=self.dtype,
+            device=self.device,
+        )
+
     def _batched_component_score(
         self,
         times: Tensor,
         marks: Tensor,
         mask: Tensor,
+        horizons: Tensor,
         component_index: int,
     ) -> Tensor:
         """Vectorized exact-interval score for one mixture component."""
@@ -629,7 +636,7 @@ class NeuralHawkesMixture(nn.Module):
             )
 
         compensator = compensator + integrate(
-            self.horizon - previous_time,
+            horizons - previous_time,
             state,
         )
         return event_term - compensator

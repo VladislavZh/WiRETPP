@@ -1,5 +1,7 @@
 .venv/
 .mplconfig/
+tmp/
+*.egg-info/
 __pycache__/
 *.py[cod]
 

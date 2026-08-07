@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 import sys
 from typing import Iterable
@@ -142,12 +141,6 @@ class ReferenceHistoryMixture(nn.Module):
         marks[:, 0] = self._bos_type()
         valid[:, 0] = True
         for path_index, sequence in enumerate(sequences):
-            if not math.isclose(
-                sequence.horizon,
-                self.horizon,
-                abs_tol=1e-8,
-            ):
-                raise ValueError("sequence and model horizons differ")
             count = sequence.count
             if count:
                 times[path_index, 1 : count + 1] = torch.as_tensor(
@@ -174,7 +167,8 @@ class ReferenceHistoryMixture(nn.Module):
         sequence_list = tuple(sequences)
         if not sequence_list:
             raise ValueError("sequences must be non-empty")
-        if boundary is not None and not 0.0 < boundary < self.horizon:
+        maximum_horizon = max(sequence.horizon for sequence in sequence_list)
+        if boundary is not None and not 0.0 < boundary < maximum_horizon:
             raise ValueError("boundary must lie strictly inside the horizon")
         history_times, encoded_types, valid = self._prepare_histories(
             sequence_list
@@ -202,7 +196,7 @@ class ReferenceHistoryMixture(nn.Module):
         segment_history: list[int] = []
         for path_index, sequence in enumerate(sequence_list):
             starts = np.concatenate(([0.0], sequence.times))
-            ends = np.concatenate((sequence.times, [self.horizon]))
+            ends = np.concatenate((sequence.times, [sequence.horizon]))
             previous = 0.0
             for event_index, (event_time, mark) in enumerate(
                 zip(sequence.times, sequence.marks)
@@ -318,7 +312,12 @@ class ReferenceHistoryMixture(nn.Module):
         )
         return LatentNHPMixtureBatchTrace(
             n_paths=len(sequence_list),
-            horizon=self.horizon,
+            horizon=float(maximum_horizon),
+            path_horizons=torch.as_tensor(
+                [sequence.horizon for sequence in sequence_list],
+                dtype=self.dtype,
+                device=self.device,
+            ),
             n_components=self.n_components,
             n_marks=self.n_marks,
             event_times=torch.as_tensor(

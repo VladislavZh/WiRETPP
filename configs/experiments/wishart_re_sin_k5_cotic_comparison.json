@@ -1,0 +1,119 @@
+{
+  "experiment_name": "wishart_re_sin_k5_cotic_comparison",
+  "hypothesis": "A COTIC mixture with an explicit trajectory-level Wishart random effect will improve clustering over no-W and a LaL-style cluster-BOS control when the matched DGP applies a block-local, trajectory-specific Wishart interaction strongly within the true cluster and weakly between clusters.",
+  "data": {
+    "n_components": 5,
+    "n_marks": 5,
+    "n_per_cluster": 400,
+    "horizon": 20.0,
+    "burn_in": 0.0,
+    "kernel": "cotic_sinus_original",
+    "parameter_seed": 2026080701,
+    "simulation_seed": 2026080702,
+    "split_seed": 42,
+    "wishart_degrees_of_freedom": 25,
+    "within_cluster_base_strength": 0.7,
+    "true_cluster_block_boost": 2.4,
+    "between_cluster_strength": 0.12,
+    "true_interaction_alpha": 0.35,
+    "block_local_activity": true,
+    "within_wishart_interaction_gain": 3.0,
+    "between_wishart_interaction_gain": 0.25,
+    "cluster_baseline_totals": [0.8, 6.5, 6.5, 16.0, 2.3],
+    "interaction_mode": "convex",
+    "max_jumps": 1000,
+    "train_fraction": 0.8,
+    "validation_fraction": 0.1,
+    "test_fraction": 0.1
+  },
+  "training": {
+    "architecture": "cotic",
+    "variants": [
+      "no_wishart",
+      "signed_wishart",
+      "lal_bos"
+    ],
+    "model_seeds": [
+      0,
+      1,
+      2
+    ],
+    "optimizer_steps": 1300,
+    "k1_pretrain_steps": 300,
+    "component_clone_noise_scale": 0.001,
+    "maximum_initial_component_score_spread": 25.0,
+    "evaluation_interval": 10,
+    "physical_batch_size": 8,
+    "evaluation_batch_size": 8,
+    "gradient_accumulation_steps": 16,
+    "effective_batch_size": 128,
+    "neural_learning_rate": 0.001,
+    "omega_learning_rate": 0.01,
+    "alpha_learning_rate": 0.0001,
+    "dual_learning_rate": 0.1,
+    "assignment_rho": 50.0,
+    "optimize_mixture_logits": false,
+    "weight_decay": 0.00001,
+    "gradient_clip": 20.0,
+    "initial_alpha": 0.1,
+    "alpha_parameterization": "projected",
+    "interaction_mode": "convex",
+    "block_local_activity": true,
+    "within_wishart_interaction_gain": 3.0,
+    "between_wishart_interaction_gain": 0.25,
+    "initial_beta": 1.0,
+    "beta_schedule": "exponential_to_zero",
+    "beta_decay_rate": 5.0,
+    "exploration_degrees_of_freedom": 200,
+    "degrees_of_freedom_mode": "fixed",
+    "initial_degrees_of_freedom": 25,
+    "maximum_degrees_of_freedom": 250,
+    "degrees_of_freedom_learning_rate": 0.001,
+    "degrees_of_freedom_prior_strength": 0.01,
+    "degrees_of_freedom_prior_center": 37,
+    "mean_hyperprior_strength": 1.566,
+    "train_samples": 2,
+    "validation_samples": 8,
+    "test_samples": 16,
+    "cotic_input_channels": 32,
+    "cotic_hidden_size": 64,
+    "cotic_num_layers": 7,
+    "cotic_kernel_size": 3,
+    "cotic_dilation_factor": 1.29,
+    "dropout": 0.1,
+    "quadrature_order": 8,
+    "selection_metric": "validation_purity",
+    "test_used_for_selection": false,
+    "lal_scope": "LaL-style shared COTIC with cluster-specific BOS embeddings, initialized by multiplicative splits and trained at fixed K; no split/merge/delete random walk"
+  },
+  "analysis": {
+    "minimum_observable_validation_ridge_lda_accuracy": 0.7,
+    "minimum_observable_all_kmeans_ari": 0.2,
+    "primary_metrics": [
+      "test_purity",
+      "test_ari"
+    ],
+    "secondary_metrics": [
+      "test_nmi",
+      "test_nll_per_exposure"
+    ],
+    "paired_contrasts": [
+      "signed_wishart-minus-no_wishart",
+      "signed_wishart-minus-lal_bos"
+    ],
+    "dgp_audits": [
+      "true-block versus other-block Wishart mass",
+      "within-true-block versus within-other-block correlation",
+      "between-block correlation",
+      "oracle block-mass routing accuracy",
+      "trajectory-level rate relative SD under the block-local transform"
+    ]
+  },
+  "runtime": {
+    "device": "cuda",
+    "cuda_visible_devices": "0",
+    "vram_limit_mib": 7000,
+    "vram_poll_seconds": 1.0,
+    "sequential_only": true
+  }
+}

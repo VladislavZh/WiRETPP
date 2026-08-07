@@ -17,6 +17,7 @@ from lal_wishart.metrics import (
     normalized_mutual_information,
 )
 from lal_wishart.reproduction.paper_k3c5 import generate_paper_k3c5
+from lal_wishart.reproduction.signed_k3c5 import generate_signed_k3c5
 
 
 @dataclass(frozen=True)
@@ -102,6 +103,105 @@ def make_splits(
         "spectral_radius_by_class": [
             parameters.spectral_radius for parameters in paper.parameters
         ],
+    }
+    return build("train"), build("validation"), build("test"), audit
+
+
+def make_signed_splits(
+    *,
+    heterogeneity: str,
+    parameter_seed: int,
+    simulation_seed: int,
+    split_seed: int,
+    horizon: float,
+    generated_per_class: int,
+    train_per_class: int,
+    validation_per_class: int,
+    test_per_class: int,
+    true_alpha: float = 1.0,
+) -> tuple[ExperimentSplit, ExperimentSplit, ExperimentSplit, dict]:
+    """Generate and split the controlled signed random-effect DGP."""
+
+    required_per_class = (
+        train_per_class + validation_per_class + test_per_class
+    )
+    if generated_per_class < required_per_class:
+        raise ValueError(
+            "generated_per_class must cover train/validation/test"
+        )
+    dataset = generate_signed_k3c5(
+        heterogeneity=heterogeneity,
+        parameter_seed=parameter_seed,
+        simulation_seed=simulation_seed,
+        n_per_cluster=generated_per_class,
+        n_clusters=3,
+        n_marks=5,
+        horizon=horizon,
+        true_alpha=true_alpha,
+        max_jumps=1000,
+    )
+    rng = np.random.default_rng(split_seed)
+    split_indices: dict[str, list[int]] = {
+        "train": [],
+        "validation": [],
+        "test": [],
+    }
+    for cluster in range(3):
+        indices = np.flatnonzero(dataset.labels == cluster)
+        indices = indices[rng.permutation(len(indices))]
+        first = train_per_class
+        second = first + validation_per_class
+        third = second + test_per_class
+        split_indices["train"].extend(indices[:first].tolist())
+        split_indices["validation"].extend(indices[first:second].tolist())
+        split_indices["test"].extend(indices[second:third].tolist())
+
+    def build(name: str) -> ExperimentSplit:
+        indices = np.asarray(split_indices[name], dtype=np.int64)
+        indices = indices[rng.permutation(len(indices))]
+        return ExperimentSplit(
+            sequences=tuple(dataset.sequences[index] for index in indices),
+            labels=dataset.labels[indices],
+        )
+
+    counts = np.asarray([sequence.count for sequence in dataset.sequences])
+    identity = np.eye(dataset.mean_matrix.shape[0])
+    distances = np.linalg.norm(
+        dataset.random_effects - dataset.mean_matrix,
+        axis=(1, 2),
+    )
+    audit = {
+        "dgp": "signed_wishart_hawkes",
+        "heterogeneity": heterogeneity,
+        "true_alpha": true_alpha,
+        "true_degrees_of_freedom": dataset.degrees_of_freedom,
+        "parameter_seed": parameter_seed,
+        "simulation_seed": simulation_seed,
+        "split_seed": split_seed,
+        "horizon": horizon,
+        "n_sequences": int(len(counts)),
+        "generated_per_class": int(generated_per_class),
+        "used_per_class": int(required_per_class),
+        "unused_per_class": int(generated_per_class - required_per_class),
+        "mean_event_count": float(counts.mean()),
+        "sd_event_count": float(counts.std(ddof=1)),
+        "minimum_event_count": int(counts.min()),
+        "maximum_event_count": int(counts.max()),
+        "mean_event_count_by_class": [
+            float(counts[dataset.labels == cluster].mean())
+            for cluster in range(3)
+        ],
+        "spectral_radius_by_class": [
+            parameters.spectral_radius for parameters in dataset.parameters
+        ],
+        "mean_random_effect_frobenius_distance": float(distances.mean()),
+        "sd_random_effect_frobenius_distance": float(
+            distances.std(ddof=1)
+        ),
+        "mean_matrix_distance_from_identity": float(
+            np.linalg.norm(dataset.mean_matrix - identity)
+        ),
+        "generation_proposals": dataset.proposals,
     }
     return build("train"), build("validation"), build("test"), audit
 

@@ -16,6 +16,8 @@ dependencies = [
   "omegaconf==2.3.0",
   "PyYAML==6.0.3",
   "packaging==26.2",
+  "tqdm==4.67.1",
+  "optuna==4.9.0",
 ]
 
 [tool.setuptools.packages.find]

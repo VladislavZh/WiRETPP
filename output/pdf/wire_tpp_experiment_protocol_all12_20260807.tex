@@ -1,0 +1,1064 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{russian}
+\setotherlanguage{english}
+\setmainfont{Arial}
+\setsansfont{Arial}
+\setmonofont{Consolas}
+\usepackage{unicode-math}
+\setmathfont{Latin Modern Math}
+
+\usepackage[a4paper,top=18mm,bottom=20mm,left=17mm,right=17mm]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{pdflscape}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{lastpage}
+
+\definecolor{navy}{HTML}{153451}
+\definecolor{blue}{HTML}{2A6F97}
+\definecolor{cyan}{HTML}{4A9BB8}
+\definecolor{lightblue}{HTML}{EAF3F7}
+\definecolor{lightgreen}{HTML}{EDF5EE}
+\definecolor{lightred}{HTML}{F8ECEA}
+\definecolor{lightamber}{HTML}{FAF3E1}
+\definecolor{textgray}{HTML}{4D5B66}
+\definecolor{linegray}{HTML}{D8E0E5}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=navy,
+  urlcolor=blue,
+  pdftitle={WiRE-TPP: протокол экспериментов, corrected all-12 и алгоритм обучения},
+  pdfauthor={Экспериментальный протокол WiRE-TPP},
+  pdfsubject={Signed-Wishart random effects for temporal point-process clustering},
+  pdfkeywords={WiRE-TPP, Signed-Wishart, THP, COTIC, clustering, all-12}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{textgray}WiRE-TPP / Signed-Wishart}
+\fancyhead[R]{\small\color{textgray}Экспериментальный протокол / 07.08.2026}
+\fancyfoot[L]{\small\color{textgray}Corrected all-12, абляции и отрицательные результаты}
+\fancyfoot[R]{\small\color{textgray}\thepage\ / \pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\setlength{\headheight}{14pt}
+
+\titleformat{\section}{\Large\bfseries\color{navy}}{\thesection}{0.65em}{}
+\titleformat{\subsection}{\large\bfseries\color{blue}}{\thesubsection}{0.65em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{cyan}}{\thesubsubsection}{0.65em}{}
+\titlespacing*{\section}{0pt}{1.25em}{0.5em}
+\titlespacing*{\subsection}{0pt}{0.95em}{0.35em}
+\titlespacing*{\subsubsection}{0pt}{0.75em}{0.25em}
+
+\setlist[itemize]{leftmargin=1.45em,itemsep=0.18em,topsep=0.3em}
+\setlist[enumerate]{leftmargin=1.65em,itemsep=0.22em,topsep=0.3em}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.44em}
+\setlength{\emergencystretch}{3em}
+\renewcommand{\arraystretch}{1.14}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Ktarget}{K^{\star}}
+\newcommand{\boxnote}[2]{%
+  \begin{center}\setlength{\fboxsep}{9pt}%
+  \colorbox{#1}{\begin{minipage}{0.94\textwidth}\raggedright #2\par\end{minipage}}
+  \end{center}}
+\newcommand{\verdict}[1]{\boxnote{lightred}{\textbf{Итог.} #1}}
+\newcommand{\rationale}[1]{\boxnote{lightgreen}{\textbf{Обоснование.} #1}}
+\newcommand{\caveat}[1]{\boxnote{lightamber}{\textbf{Ограничение.} #1}}
+\newcommand{\sourcepath}[1]{\par\noindent\textcolor{textgray}{\footnotesize\path{#1}}\par}
+
+\begin{document}
+
+\begin{titlepage}
+  \thispagestyle{empty}
+  \vspace*{11mm}
+  {\sffamily\bfseries\fontsize{27}{32}\selectfont\color{navy}
+    WiRE-TPP / Signed-Wishart\par}
+  \vspace{3mm}
+  {\sffamily\fontsize{19}{24}\selectfont\color{blue}
+    Протокол экспериментальной программы,\par
+    corrected all-12 и полный алгоритм обучения\par}
+  \vspace{8mm}
+  {\color{cyan}\rule{\textwidth}{1.6pt}}
+  \vspace{8mm}
+
+  {\large Сводка воспроизводимости, последовательных абляций THP/COTIC,
+  matched-DGP экспериментов и отрицательных результатов с точной фиксацией
+  фактически применённых метапараметров.}
+
+  \vspace{7mm}
+  \verdict{Совокупность экспериментов не подтверждает устойчивого общего
+  преимущества Signed-Wishart по кластеризации. На corrected all-12 COTIC
+  остаётся сильным и слегка выигрывает у no-W в среднем, тогда как THP в среднем
+  немного проигрывает. На специально согласованном Wishart-DGP обнаружен слабый
+  средний эффект, но его знак меняется между seeds. Обучаемая $\nu$ и увеличение
+  числа train-MC samples проблему не устранили.}
+
+  \vspace{4mm}
+  \boxnote{lightblue}{
+    \textbf{Правило чтения результатов.} Выбор checkpoint и конфигурации
+    производится по максимальной validation purity, затем по меньшему validation
+    NLL. Test используется только описательно после выбора. Строки, где решение
+    было принято вручную или после просмотра test, прямо помечены и не считаются
+    подтверждающим сравнением.
+  }
+
+  \vfill
+  \begin{tabular}{@{}ll@{}}
+    \textbf{Дата фиксации:} & 7 августа 2026 г. \\
+    \textbf{Рабочая директория:} & \code{C:\textbackslash Users\textbackslash missi\textbackslash Documents\textbackslash WiRETPP} \\
+    \textbf{GPU:} & NVIDIA GeForce RTX 4060 Laptop, 8188 MiB \\
+    \textbf{Основные backbones:} & THP и COTIC \\
+    \textbf{Главная задача:} & кластеризация marked event sequences \\
+  \end{tabular}
+  \vspace{8mm}
+\end{titlepage}
+
+\begingroup
+\footnotesize
+\setlength{\parskip}{0pt}
+\tableofcontents
+\endgroup
+\newpage
+
+\section{Краткое резюме и статус доказательств}
+
+\subsection{Что действительно установлено}
+
+\begin{enumerate}
+  \item Репозиторий и опубликованные checkpoints воспроизводимы на уровне
+  inference: повторный MC-аудит фиксированных весов дал отклонения suffix NLL
+  не более $6.1\cdot10^{-4}$ и purity не более $1.88\cdot10^{-3}$.
+  \item В ранней 300-epoch реконструкции Wishart улучшал predictive suffix NLL
+  во всех шести paired-сравнениях, но clustering metrics заметно менялись при
+  retraining. Значит, MC evaluation был стабилен, а optimization path --- нет.
+  \item На corrected all-12, объединённом по seeds 0, 1, 2, COTIC-Wishart имеет
+  среднюю test purity $0.98874$ против $0.98715$ у COTIC no-W
+  ($+0.00159$). THP-Wishart имеет $0.97245$ против $0.97677$
+  ($-0.00432$).
+  \item Самый трудный случай --- \code{sin\_K5\_C5} с THP. На трёх seeds
+  THP-Wishart даёт $0.8667\pm0.0900$ test purity, no-W ---
+  $0.9250\pm0.0260$. COTIC на том же датасете остаётся почти идеальным:
+  $0.9883\pm0.0076$ для Wishart.
+  \item Заморозка encoder во время overcomplete elimination и отдельная
+  K=1-инициализация улучшали отдельные односидовые точки, но эффект сильно
+  зависел от pretraining length и не переносился как единый устойчивый рецепт.
+  \item Matched block-local Wishart-DGP с gain 3 дал среднюю validation purity
+  $0.8417$ для Wishart против $0.8250$ для no-W, но paired deltas равны
+  $+0.125,-0.025,-0.050$. Средний знак положителен, устойчивого эффекта нет.
+\end{enumerate}
+
+\subsection{Что не следует утверждать}
+
+\begin{itemize}
+  \item Нельзя утверждать, что latent Wishart всегда улучшает кластеризацию:
+  aggregate THP и несколько сильных DGP-сценариев это опровергают.
+  \item Нельзя считать \code{lal\_bos} полным воспроизведением опубликованного
+  LaL. Это только fixed-$K$ BOS-control с общим COTIC; random-walk, split/merge/
+  delete и EM-процедура LaL в нём отсутствуют.
+  \item Нельзя выбирать $\eta_{\alpha}=10^{-4}$ по test. В beta$_0=1$ sweep
+  validation winner был $10^{-5}$; $10^{-4}$ был затем зафиксирован как
+  инженерное решение для следующей постановки.
+  \item Нельзя интерпретировать движение $\alpha$ или $\nu$ как доказательство
+  идентифицированного random effect без paired improvement в held-out metrics.
+\end{itemize}
+
+\section{Карта экспериментальной программы}
+
+\begin{longtable}{p{0.12\textwidth}p{0.24\textwidth}p{0.16\textwidth}p{0.36\textwidth}}
+\toprule
+Дата & Эксперимент & Статус & Главный результат \\
+\midrule
+\endfirsthead
+\toprule
+Дата & Эксперимент & Статус & Главный результат \\
+\midrule
+\endhead
+01.08 & Published-checkpoint audit и полный 300-epoch retraining & завершён & Fixed-weight inference воспроизводим; Wishart улучшает NLL, clustering retraining нестабилен. \\
+01.08 & Signed K3C5 DGP, 3 seeds & завершён & Moderate heterogeneity: signed лучше $\alpha=0$; strong: signed хуже на всех seeds. \\
+02.08 & THP \code{sin\_K5\_C5}, fixed split, 5 seeds & завершён & Wishart $+0.019$ test purity в среднем, но сохраняет four-mode collapse. \\
+02.08 & Optuna, frozen exploration, MC и scheduler & завершён & Нет устойчивой точки; больше MC не помогает; beta curriculum даёт лишь $+0.003$ validation purity. \\
+03.08 & Two-phase COTIC \code{K5\_C5} & завершён, 1 seed & K=1 pretrain + freeze + DPP дал val/test $0.995/1.000$; требуется multiseed. \\
+04--05.08 & Original и corrected all-12 & завершён & 12 datasets $\times$ 2 architectures $\times$ 2 variants $\times$ 3 seeds; COTIC стабилен, THP \code{sin\_K5} нестабилен. \\
+06.08 & Frozen backbone LR $\times$ warmup, 25 jobs & завершён & Лучший seed-0 val/test $0.945/0.910$ при $\eta_{bb}=3\cdot10^{-4}$, warmup 50. \\
+06.08 & $\eta_{\alpha}\times$ K=1 pretrain, 25 jobs & завершён & Лучший val $0.935$ при pretrain 300 и $\eta_{\alpha}=10^{-5}$; test $0.890$ описательно. \\
+07.08 & Big-protocol beta$_0=1$, $\eta_{\alpha}$ sweep, 5 jobs & завершён & Validation winner $10^{-5}$: val/test $0.910/0.885$; $10^{-4}$: $0.905/0.925$. \\
+07.08 & Overcomplete backbone LR sweep, 7 planned & частичный, 5/7 & Из завершённых лучший $10^{-6}$: val/test $0.870/0.835$; прогон остановлен. \\
+07.08 & Первый full matched Wishart-RE suite, 9 planned & остановлен, 2/9 & Обе модели collapsed в один cluster; постановка признана дефектной. \\
+07.08 & Исправленный block-local DGP gain 1/3/5 & debug завершён & Gain 3 дал слабый средний Wishart эффект, но paired sign нестабилен. \\
+07.08 & Fixed/learned $\nu$, LR$_\nu$, MC 1/2/4 & debug завершён & Fixed $\nu=25$ выбран validation rule; learnable $\nu$ и больше MC purity не улучшили. \\
+\bottomrule
+\end{longtable}
+
+\caveat{В workspace есть дополнительные smoke, unit и аварийные каталоги.
+Они используются для аудита реализации, но не включаются в количественный
+benchmark. Статусы \code{running} в некоторых \code{suite\_progress.json}
+являются stale metadata после ручной остановки и не означают живой процесс.}
+
+\section{Данные, split и метрики}
+
+Траектория записывается как
+\[
+x_i=\{(t_{ij},c_{ij})\}_{j=1}^{n_i},\qquad c_{ij}\in\{1,\ldots,C\},
+\qquad t_{ij}\le T_i.
+\]
+Во всех DAN all-12 экспериментах $C=5$. Dataset name кодирует истинное число
+кластеров: \code{K2}, \code{K3}, \code{K4}, \code{K5}. Рассматриваются три
+семейства: обычные Hawkes-процессы \code{K*\_C5}, синусоидальные
+\code{sin\_K*\_C5} и усечённые \code{trunc\_K*\_C5}.
+
+Для all-12 и поздних sweeps используется один и тот же split:
+\code{numpy.RandomState(42).shuffle}, затем 80/10/10. Model seeds меняют
+инициализацию, minibatches и Wishart sampling, но не split. Для
+\code{sin\_K5\_C5} это 1600/200/200 траекторий.
+
+\begin{center}
+\begin{tabularx}{\textwidth}{>{\bfseries}p{0.18\textwidth}X X}
+\toprule
+Множество & Разрешено & Запрещено \\
+\midrule
+Train & gradients, OT dual, hyperprior, pruning score & использование labels в objective \\
+Validation & purity/NLL checkpoint selection & parameter fitting и test-dependent rule \\
+Test & один descriptive pass после выбора & выбор checkpoint, LR, $\alpha$, $\nu$ или DGP \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Основная метрика model selection --- validation purity; при равенстве purity
+выбирается меньший validation NLL per exposure. Test-метрики: purity, ARI, NMI,
+NLL per exposure. Purity допускает many-to-one matching и поэтому дополняется
+ARI/NMI и размерами кластеров.
+
+\rationale{Purity была выбрана для сопоставимости с LaL. ARI и NMI нужны,
+поскольку высокая purity может скрывать дублирование одной истинной моды двумя
+предсказанными компонентами. NLL проверяет predictive fit, но не заменяет
+clustering metric: во многих runs NLL улучшался одновременно с ухудшением
+purity.}
+
+\section{Модель и полный алгоритм обучения}
+
+\subsection{Базовый mixture TPP}
+
+Shared encoder $H_{\theta}$ строит историю, а component head $G_{\phi_k}$
+задаёт $C$ положительных intensities $\lambda_{kc}^{(0)}(t\mid H_{\theta})$.
+Для компоненты $k$:
+\[
+\ell_{ik}=\sum_j\log\lambda_{k,c_{ij}}(t_{ij})-
+\int_0^{T_i}\sum_{c=1}^{C}\lambda_{kc}(t)\,dt.
+\]
+Backbone может быть THP или COTIC; Wishart layer не меняет его контракт.
+
+\subsection{K=1 pretraining и expansion}
+
+Сначала одна компонента обучается по обычному TPP NLL. Затем её head копируется
+в $K_0=\Ktarget+5$ блоков:
+\[
+\phi_k=\phi_1+\varepsilon_k,\qquad
+\varepsilon_k\sim\mathcal N(0,\sigma_{exp}^2I).
+\]
+В all-12 pretraining длится 10 optimizer steps, $\sigma_{exp}=0.01$.
+
+\rationale{K=1 отделяет обучение общей временной динамики от allocation
+компонент. Малый шум разрушает permutation symmetry, не уничтожая общий
+масштаб intensity. Overcomplete запас из пяти heads даёт backward elimination
+несколько кандидатов на каждую финальную компоненту.}
+
+\subsection{Latent Wishart random effect}
+
+При текущем $K$ размер latent matrix равен $D=KC$. Обучаемая средняя матрица
+задаётся Cholesky-параметром:
+\[
+\Omega=LL^{\mathsf T},\qquad \operatorname{tr}\Omega=D,
+\qquad \operatorname{diag}(L)=\operatorname{softplus}(r)+10^{-5}.
+\]
+Траекторный random effect:
+\[
+W_i\sim\operatorname{Wishart}_{D}(\nu,\Omega/\nu),
+\qquad \mathbb E[W_i]=\Omega.
+\]
+В all-12 $\nu(K)=\lfloor1.5KC\rfloor$: для \code{sin\_K5} это 75 при
+$K=10$ и 37 при $K=5$.
+
+\rationale{Одна и та же $W_i$ используется для route и intensity transform на
+всей траектории. Trace normalization удаляет неидентифицируемый общий scale,
+Cholesky гарантирует SPD, а изменение $\nu$ вместе с $D$ поддерживает примерно
+сопоставимый уровень sampling noise при pruning.}
+
+\subsection{Frozen exploration Wishart}
+
+Во время train независимо сэмплируется
+$W_{exp}\sim\operatorname{Wishart}(\nu_e,I/\nu_e)$ и применяется curriculum
+\[
+W_t=(1-\beta_t)W_{learn}+\beta_tW_{exp},
+\]
+\[
+x_t=\frac{t-1}{T-1},\qquad
+\beta_t=\beta_0\frac{e^{-d_\beta x_t}-e^{-d_\beta}}
+{1-e^{-d_\beta}}.
+\]
+В all-12 $\beta_0=0.9$, $d_\beta=5$, $\nu_e=200$; в позднем sweep
+$\beta_0=1$. На validation, pruning и test всегда $\beta=0$.
+
+\rationale{Curriculum должен задержать раннюю фиксацию случайного basin и затем
+точно вернуть inference к learned law. Эксперименты показывают, что сам по себе
+этот механизм даёт лишь малый и нестабильный выигрыш.}
+
+\subsection{Signed convex intensity transform}
+
+Из $W$ строится correlation matrix и off-diagonal coupling:
+\[
+R=\operatorname{diag}(W)^{-1/2}W\operatorname{diag}(W)^{-1/2},
+\qquad B=R-I.
+\]
+Пусть $\lambda^{(0)}\in\R_+^{KC}$ --- base intensities,
+$a=\lambda^{(0)}/(\epsilon+\sum_d\lambda_d^{(0)})$ и
+$q=\operatorname{softplus}^{-1}(\lambda^{(0)})$. Тогда
+\[
+p=Ba,\qquad
+\widetilde q=(1-\alpha)q+\alpha p,
+\qquad
+\widetilde\lambda=\operatorname{softplus}(\widetilde q),
+\qquad \alpha\in[0,1].
+\]
+В all-12 $\alpha_0=0.1$, projected parameterization, $\eta_\alpha=10^{-4}$.
+
+\rationale{Correlation normalization отделяет interaction structure от scale;
+$B=R-I$ удаляет self-effect. Exact inverse softplus сохраняет исходную TPP
+интенсивность при $\alpha=0$. Projected $[0,1]$ ограничивает деформацию, а
+финальный softplus гарантирует положительность.}
+
+\subsection{Wishart gate и MC-маргинализация}
+
+Для sample $s$ cluster gate равен нормированной диагональной массе его
+$C\times C$ блока:
+\[
+g_{isk}=\log\frac{\sum_{c=1}^{C}(W_{is})_{kc,kc}}
+{\sum_{r=1}^{K}\sum_{c=1}^{C}(W_{is})_{rc,rc}}.
+\]
+Wishart интегрируется, сохраняя component index:
+\[
+S_{ik}=\log\sum_{s=1}^{S}\exp(\ell_{isk}+g_{isk})-\log S.
+\]
+
+\rationale{Gate и intensity используют одну latent $W_i$, поэтому route и
+random effect согласованы. Log-sum-exp даёт стабильную дифференцируемую
+аппроксимацию marginal likelihood.}
+
+\subsection{Global unbalanced OT dual}
+
+При target marginal $q_k=1/K$, temperature $\tau$, penalty $\rho$ и dual
+$u\in\R^K$:
+\[
+r_{ik}=\operatorname{softmax}_k\left(\frac{S_{ik}-u_k}{\tau}\right),
+\qquad
+\bar q_k(u)=\operatorname{softmax}_k\left(\log q_k+\frac{u_k}{\rho}\right),
+\]
+\[
+\mathcal F=-\tau\frac1B\sum_i\log\sum_k e^{(S_{ik}-u_k)/\tau}
+-\rho\log\sum_k e^{\log q_k+u_k/\rho}.
+\]
+Primal minimизирует $\mathcal F$, dual максимизирует; после update
+$u\leftarrow u-\operatorname{mean}(u)$. В all-12 $\rho=5$ постоянно,
+$\eta_u=0.01$ для Wishart и $0.05$ для исторического no-W control.
+
+\rationale{Global dual мягко препятствует component collapse, не навязывая
+равный баланс внутри каждого microbatch. Центрирование устраняет additive
+gauge. Разный dual LR у W/no-W является историческим confound и учитывается в
+интерпретации paired results.}
+
+\subsection{Hyperprior, DPP и полный loss}
+
+Mean-matrix penalty:
+\[
+\mathcal L_{\Omega}=\frac{\gamma_\Omega}{2N_{tr}}
+(\operatorname{tr}\Omega-\log\det\Omega-D).
+\]
+Functional DPP, если включён:
+\[
+K^{DPP}_{kr}=\exp\left(-\frac{\|v_k-v_r\|^2}{2h^2}\right)
++\epsilon_{DPP}\delta_{kr},\qquad
+\mathcal L_{DPP}=-\frac1K\log\det K^{DPP}.
+\]
+Итоговая primal objective:
+\[
+\mathcal L=\mathcal F+\mathcal L_{\Omega}+w_{DPP}(t)\mathcal L_{DPP}.
+\]
+В all-12 $\gamma_\Omega=1.566$, а $w_{DPP}=0$. DPP применялся только в
+поздних frozen-encoder постановках.
+
+\rationale{Hyperprior одновременно является SPD barrier и shrinkage к identity.
+DPP нужен после cloning для функционального разведения heads, но после выбора
+target $K$ repulsion может мешать likelihood fine-tuning; поэтому в двухфазном
+протоколе он затухает до нуля.}
+
+\subsection{Physical backward elimination}
+
+После warmup 300 выполняются пять удалений на шагах 300, 400, 500, 600, 700.
+На всех train trajectories с $S_{prune}$ и $\beta=0$ считаются full score
+$L_{full}$ и score физически уменьшенной копии $L_{-j}$:
+\[
+\Delta_j=L_{-j}-L_{full},\qquad j^\star=\arg\min_j\Delta_j.
+\]
+Удаляются head $j^\star$ и его $C$ координат в $\Omega$; сохраняется principal
+submatrix, затем trace нормируется до нового $D$. Primal optimizer
+пересоздаётся, dual обнуляется и меняет размерность, lineage обновляется.
+
+\rationale{Full-train marginal NLL измеряет непосредственный ущерб без labels и
+validation leakage. Common random numbers уменьшают variance разности.
+Physical removal, в отличие от masking, уменьшает и head, и latent dimension;
+optimizer moments после смены геометрии больше невалидны.}
+
+\subsection{Один optimizer step}
+
+\begin{enumerate}
+  \item Вычислить $\beta_t$, $\rho_t$, DPP weight и, если применимо, encoder LR.
+  \item Взять $A$ microbatches по $B$ trajectories; effective batch $BA$.
+  \item Для каждой траектории сэмплировать $S_{train}$ matrices, построить signed
+  intensities, gates и $S_{ik}$.
+  \item Посчитать $\mathcal F$, hyperprior и DPP; вызвать backward от
+  $\mathcal L/A$.
+  \item Clip global primal norm до 20, сделать Adam step, project $\alpha$.
+  \item Сделать maximizing Adam step dual и центрировать $u$.
+  \item На pruning step выполнить physical removal и reset optimizers.
+  \item Оценить validation с $\beta=0$; checkpoint eligible только при
+  $K=\Ktarget$.
+\end{enumerate}
+
+\subsection{Validation selection и test}
+
+Лучший eligible checkpoint максимизирует validation purity; tie-break ---
+меньший validation NLL. После train загружаются model state и dual лучшего
+checkpoint. Test оценивается один раз с $\beta=0$ и $S_{test}=16$ без updates.
+
+\section{Corrected all-12: точный протокол}
+
+\subsection{Состав benchmark}
+
+\begin{itemize}
+  \item 12 datasets: \code{K2--K5}, \code{sin\_K2--sin\_K5},
+  \code{trunc\_K2--trunc\_K5}; везде $C=5$.
+  \item 2 architectures: THP и COTIC.
+  \item 2 variants: no-W и Signed-Wishart.
+  \item 3 model seeds: 0, 1, 2; split seed всегда 42.
+  \item Всего в объединённом анализе 144 runs. Corrected seed-0 Wishart suite
+  содержит 24/24; seeds 1--2 suite --- 96/96; seed-0 no-W взят из предыдущего
+  завершённого suite.
+\end{itemize}
+
+\subsection{Гиперпараметры Wishart all-12}
+
+\begin{longtable}{p{0.30\textwidth}p{0.21\textwidth}p{0.39\textwidth}}
+\toprule
+Параметр & Значение & Комментарий \\
+\midrule
+\endfirsthead
+\toprule
+Параметр & Значение & Комментарий \\
+\midrule
+\endhead
+$K_0,\Ktarget$ & $\Ktarget+5,\Ktarget$ & Всегда ровно пять eliminations. \\
+K=1 pretraining & 10 steps & Seed 0 W построил собственный K=1; seeds 1--2 W переиспользовал paired no-W checkpoint byte-identically. \\
+Warmup / prune interval / post-prune & 300 / 100 / 600 & Prune steps 300, 400, 500, 600, 700; total 1300. \\
+Head clone noise & 0.01 & Symmetry breaking. \\
+Neural LR & $10^{-3}$ & Фактический общий optimizer для shared backbone и heads. \\
+Historical backbone metadata LR & $10^{-5}$ & Записан в config/result, но не создаёт отдельную group; history логирует $10^{-3}$. \\
+Omega LR / alpha LR & $10^{-2}$ / $10^{-4}$ & Без weight decay. \\
+Dual LR / $\rho$ & $10^{-2}$ / 5 & $\rho$ постоянно 5. \\
+Weight decay / global clip & $10^{-5}$ / 20 & Weight decay только neural parameters. \\
+Physical batch / accumulation & 16 / 8 & Effective batch 128. \\
+Eval batch & 16 & Validation на каждом optimizer step. \\
+MC train/val/test/prune & 2 / 8 / 16 / 8 & Independent fixed-seed RNG streams. \\
+$\alpha_0$, parameterization, mode & 0.1, projected, convex & $\alpha\in[0,1]$, temperature 1. \\
+$\nu(K)$ & $\lfloor1.5KC\rfloor$ & Integer fixed degrees of freedom. \\
+$\beta_0$, decay, $\nu_e$ & 0.9, 5, 200 & Exponential-to-zero; eval всегда $\beta=0$. \\
+Mean hyperprior & 1.566 & Trace/logdet penalty. \\
+DPP & 0 & Bandwidth/jitter metadata неактивны. \\
+Encoder freeze / ramp & false / неактивен & Это не frozen protocol 06.08. \\
+Selection & max val purity, min val NLL & Test не участвует. \\
+\bottomrule
+\end{longtable}
+
+\caveat{No-W control не является идеально однофакторной абляцией Wishart:
+его dual LR равен 0.05, physical batch/accumulation 64/2, а seed-0 correction
+использует другой K=1 checkpoint. Effective batch в обоих variants равен 128,
+а seeds 1--2 имеют exact paired K=1 reuse.}
+
+\subsection{Seed 0: полный corrected Wishart результат}
+
+В следующих таблицах W --- corrected Wishart, no-W --- исторический paired
+control. Значения test описательны; LaL --- опубликованный mean из локального
+reference-файла:
+\sourcepath{artifacts/dan_all_arch_newwishart_beta_cotic7_seed0_20260802/PUBLISHED_DAN_PURITY.csv}.
+
+\begin{landscape}
+\scriptsize
+\begin{longtable}{llrrrrrrrr}
+\toprule
+Dataset & Arch & Val W & Test W & ARI W & NLL W & Test no-W & $\alpha$ & Step & LaL \\
+\midrule
+\endfirsthead
+\toprule
+Dataset & Arch & Val W & Test W & ARI W & NLL W & Test no-W & $\alpha$ & Step & LaL \\
+\midrule
+\endhead
+K2\_C5 & COTIC & 1.000 & 1.000 & 1.000 & 1.9915 & 1.000 & 0.1079 & 747 & 0.970 \\
+K3\_C5 & COTIC & 1.000 & 1.000 & 1.000 & 1.9742 & 1.000 & 0.1077 & 800 & 0.850 \\
+K4\_C5 & COTIC & 1.000 & 1.000 & 1.000 & 1.8997 & 1.000 & 0.1165 & 1095 & 0.900 \\
+K5\_C5 & COTIC & 1.000 & 1.000 & 1.000 & 1.9231 & 0.965 & 0.1083 & 1283 & 0.840 \\
+sin\_K2\_C5 & COTIC & 1.000 & 1.000 & 1.000 & 3.4839 & 1.000 & 0.1097 & 721 & 0.990 \\
+sin\_K3\_C5 & COTIC & 1.000 & 0.9917 & 0.9759 & 0.6453 & 0.9917 & 0.1034 & 1258 & 0.990 \\
+sin\_K4\_C5 & COTIC & 0.9813 & 0.9438 & 0.8484 & 0.8200 & 0.9500 & 0.1030 & 1001 & 0.920 \\
+sin\_K5\_C5 & COTIC & 0.990 & 0.980 & 0.9474 & 3.0326 & 0.990 & 0.1117 & 1281 & 0.920 \\
+trunc\_K2\_C5 & COTIC & 1.000 & 1.000 & 1.000 & 3.7149 & 1.000 & 0.1336 & 702 & 1.000 \\
+trunc\_K3\_C5 & COTIC & 0.975 & 0.9667 & 0.9040 & 4.2103 & 0.9833 & 0.1455 & 825 & 0.960 \\
+trunc\_K4\_C5 & COTIC & 0.9938 & 0.9875 & 0.9655 & 3.8171 & 0.9875 & 0.1383 & 706 & 0.990 \\
+trunc\_K5\_C5 & COTIC & 0.950 & 0.975 & 0.9379 & 3.9446 & 0.970 & 0.1395 & 713 & 0.940 \\
+\midrule
+K2\_C5 & THP & 1.000 & 1.000 & 1.000 & 2.4279 & 1.000 & 0.1753 & 1288 & 0.970 \\
+K3\_C5 & THP & 1.000 & 1.000 & 1.000 & 2.3733 & 1.000 & 0.1683 & 1288 & 0.850 \\
+K4\_C5 & THP & 1.000 & 0.9938 & 0.9844 & 2.2501 & 0.9875 & 0.1814 & 1274 & 0.900 \\
+K5\_C5 & THP & 0.995 & 0.980 & 0.9521 & 2.4411 & 0.990 & 0.1778 & 1223 & 0.840 \\
+sin\_K2\_C5 & THP & 0.975 & 1.000 & 1.000 & 3.6827 & 1.000 & 0.1099 & 1300 & 0.990 \\
+sin\_K3\_C5 & THP & 1.000 & 0.9833 & 0.9524 & 1.0541 & 0.9917 & 0.1055 & 1280 & 0.990 \\
+sin\_K4\_C5 & THP & 0.9063 & 0.9063 & 0.7774 & 1.1977 & 0.900 & 0.1026 & 1265 & 0.920 \\
+sin\_K5\_C5 & THP & 0.865 & 0.870 & 0.7166 & 3.3949 & 0.910 & 0.1390 & 1267 & 0.920 \\
+trunc\_K2\_C5 & THP & 1.000 & 1.000 & 1.000 & 3.6242 & 1.000 & 0.1528 & 797 & 1.000 \\
+trunc\_K3\_C5 & THP & 0.975 & 0.975 & 0.9269 & 4.1716 & 0.9667 & 0.1588 & 858 & 0.960 \\
+trunc\_K4\_C5 & THP & 0.9938 & 0.9875 & 0.9655 & 3.8055 & 0.9938 & 0.1719 & 1001 & 0.990 \\
+trunc\_K5\_C5 & THP & 0.950 & 0.975 & 0.9399 & 3.9370 & 0.980 & 0.1626 & 851 & 0.940 \\
+\bottomrule
+\end{longtable}
+\end{landscape}
+
+Для seed-0 THP \code{sin\_K5}: best validation NLL 3.0898, lineage
+$[0,2,3,4,9]$, $\alpha\in[0.10009,0.13921]$, median/max alpha-gradient
+4.047/20.553, clip fraction 0.8977, runtime 1898.5 s. Финальная $\Omega$
+имеет eigenvalue range $[0.0257,17.8022]$; train soft marginal L1 до uniform
+равен 0.0969.
+
+\subsection{Трёхсидовая сводка all-12}
+
+\begin{landscape}
+\scriptsize
+\begin{longtable}{llrrrrr}
+\toprule
+Dataset & Arch & W test mean$\pm$SD & no-W test mean$\pm$SD & $\Delta$ & W ARI mean & LaL \\
+\midrule
+\endfirsthead
+\toprule
+Dataset & Arch & W test mean$\pm$SD & no-W test mean$\pm$SD & $\Delta$ & W ARI mean & LaL \\
+\midrule
+\endhead
+K2\_C5 & COTIC & $1.0000\pm0.0000$ & $1.0000\pm0.0000$ & 0.0000 & 1.0000 & 0.970 \\
+K3\_C5 & COTIC & $1.0000\pm0.0000$ & $1.0000\pm0.0000$ & 0.0000 & 1.0000 & 0.850 \\
+K4\_C5 & COTIC & $1.0000\pm0.0000$ & $1.0000\pm0.0000$ & 0.0000 & 1.0000 & 0.900 \\
+K5\_C5 & COTIC & $1.0000\pm0.0000$ & $0.9817\pm0.0144$ & 0.0183 & 1.0000 & 0.840 \\
+sin\_K2\_C5 & COTIC & $1.0000\pm0.0000$ & $1.0000\pm0.0000$ & 0.0000 & 1.0000 & 0.990 \\
+sin\_K3\_C5 & COTIC & $0.9917\pm0.0000$ & $0.9889\pm0.0048$ & 0.0028 & 0.9759 & 0.990 \\
+sin\_K4\_C5 & COTIC & $0.9458\pm0.0219$ & $0.9563\pm0.0108$ & -0.0104 & 0.8555 & 0.920 \\
+sin\_K5\_C5 & COTIC & $0.9883\pm0.0076$ & $0.9867\pm0.0029$ & 0.0017 & 0.9691 & 0.920 \\
+trunc\_K2\_C5 & COTIC & $1.0000\pm0.0000$ & $1.0000\pm0.0000$ & 0.0000 & 1.0000 & 1.000 \\
+trunc\_K3\_C5 & COTIC & $0.9778\pm0.0127$ & $0.9778\pm0.0048$ & 0.0000 & 0.9352 & 0.960 \\
+trunc\_K4\_C5 & COTIC & $0.9896\pm0.0036$ & $0.9813\pm0.0063$ & 0.0083 & 0.9710 & 0.990 \\
+trunc\_K5\_C5 & COTIC & $0.9717\pm0.0029$ & $0.9733\pm0.0058$ & -0.0017 & 0.9311 & 0.940 \\
+\midrule
+K2\_C5 & THP & $1.0000\pm0.0000$ & $1.0000\pm0.0000$ & 0.0000 & 1.0000 & 0.970 \\
+K3\_C5 & THP & $1.0000\pm0.0000$ & $1.0000\pm0.0000$ & 0.0000 & 1.0000 & 0.850 \\
+K4\_C5 & THP & $0.9958\pm0.0036$ & $0.9958\pm0.0072$ & 0.0000 & 0.9897 & 0.900 \\
+K5\_C5 & THP & $0.9867\pm0.0058$ & $0.9933\pm0.0058$ & -0.0067 & 0.9682 & 0.840 \\
+sin\_K2\_C5 & THP & $1.0000\pm0.0000$ & $0.9958\pm0.0072$ & 0.0042 & 1.0000 & 0.990 \\
+sin\_K3\_C5 & THP & $0.9889\pm0.0048$ & $0.9889\pm0.0048$ & 0.0000 & 0.9681 & 0.990 \\
+sin\_K4\_C5 & THP & $0.8958\pm0.0295$ & $0.8917\pm0.0260$ & 0.0042 & 0.7519 & 0.920 \\
+sin\_K5\_C5 & THP & $0.8667\pm0.0900$ & $0.9250\pm0.0260$ & -0.0583 & 0.7423 & 0.920 \\
+trunc\_K2\_C5 & THP & $1.0000\pm0.0000$ & $1.0000\pm0.0000$ & 0.0000 & 1.0000 & 1.000 \\
+trunc\_K3\_C5 & THP & $0.9722\pm0.0048$ & $0.9694\pm0.0048$ & 0.0028 & 0.9192 & 0.960 \\
+trunc\_K4\_C5 & THP & $0.9917\pm0.0036$ & $0.9896\pm0.0036$ & 0.0021 & 0.9775 & 0.990 \\
+trunc\_K5\_C5 & THP & $0.9717\pm0.0029$ & $0.9717\pm0.0104$ & 0.0000 & 0.9317 & 0.940 \\
+\bottomrule
+\end{longtable}
+\end{landscape}
+
+\begin{center}
+\begin{tabular}{lrrrrrr}
+\toprule
+Arch & W purity & no-W purity & $\Delta$ & W wins/ties/losses & $\Delta$ NLL & Runtime W/no-W \\
+\midrule
+THP & 0.97245 & 0.97677 & -0.00432 & 9/18/9 & +0.00212 & 7.76/3.49 h \\
+COTIC & 0.98874 & 0.98715 & +0.00159 & 11/20/5 & -0.01548 & 8.83/3.23 h \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+В среднем по datasets THP-Wishart выше опубликованного LaL mean на 8 из 12,
+равен на одном и ниже на трёх; COTIC-Wishart выше на 10, равен на одном и ниже
+на одном. Это не paired reproduction LaL, а масштабная внешняя reference line.
+Совокупный recorded runtime 144 runs составляет 23.31 GPU-hours; peak VRAM в
+all-12 не мониторился отдельным sampler.
+
+\subsection{Разбор \code{sin\_K5\_C5} по seeds}
+
+\begin{center}
+\small
+\begin{tabular}{llrrrrr}
+\toprule
+Arch & Variant & Seed & Val & Test & ARI & Test NLL \\
+\midrule
+THP & no-W & 0 & 0.920 & 0.910 & 0.7828 & 3.4083 \\
+THP & W & 0 & 0.865 & 0.870 & 0.7166 & 3.3949 \\
+THP & no-W & 1 & 0.935 & 0.955 & 0.8879 & 3.2421 \\
+THP & W & 1 & 0.940 & 0.955 & 0.8877 & 3.2715 \\
+THP & no-W & 2 & 0.915 & 0.910 & 0.7859 & 3.2756 \\
+THP & W & 2 & 0.830 & 0.775 & 0.6227 & 3.2985 \\
+\midrule
+COTIC & no-W & 0 & 0.975 & 0.990 & 0.9764 & 3.0296 \\
+COTIC & W & 0 & 0.990 & 0.980 & 0.9474 & 3.0326 \\
+COTIC & no-W & 1 & 0.980 & 0.985 & 0.9627 & 3.0484 \\
+COTIC & W & 1 & 0.990 & 0.990 & 0.9734 & 3.0047 \\
+COTIC & no-W & 2 & 0.975 & 0.985 & 0.9627 & 3.0233 \\
+COTIC & W & 2 & 0.985 & 0.995 & 0.9866 & 3.0042 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\verdict{All-12 показывает не универсальную пользу Wishart, а interaction с
+backbone. COTIC устойчиво решает \code{sin\_K5}; THP имеет seed-dependent
+collapse, особенно W seed 2. Небольшой NLL gain THP W seed 0 не компенсирует
+ухудшение clustering.}
+
+\section{Ранние и промежуточные эксперименты}
+
+\subsection{Published snapshot и 300-epoch retraining}
+
+На 1200 trajectories (split 90/45/1065) были проверены NHP, THP, COTIC и две
+component parameterizations. Таблица показывает новый retraining seed 0.
+
+\begin{center}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Модель & no-W NLL & W NLL & W-no-W & W purity \\
+\midrule
+NHP/output split & 3.5515 & 3.4580 & -0.0935 & 0.936 \\
+NHP/lal fixed & 3.5776 & 3.4719 & -0.1057 & 0.923 \\
+THP/output split & 3.6236 & 3.5128 & -0.1108 & 0.661 \\
+THP/lal fixed & 3.5368 & 3.4969 & -0.0399 & 0.925 \\
+COTIC/output split & 3.9159 & 3.6408 & -0.2751 & 0.934 \\
+COTIC/lal fixed & 3.8771 & 3.6732 & -0.2039 & 0.709 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Wishart улучшил suffix NLL во всех шести comparisons, но THP/output-split
+purity упал с опубликованных 0.951 до 0.661, COTIC/lal-fixed --- с 0.892 до
+0.709. Внутренняя MC-SD была мала: нестабилен optimizer basin, не evaluation.
+
+\subsection{Signed DGP: moderate против strong}
+
+Трёхсидовый NHP-эксперимент использовал exact signed K3C5 DGP. В таблице
+разность signed$-\alpha=0$ по NLL; отрицательное лучше.
+
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+DGP & Signed NLL & Signed$-\alpha=0$ & Purity & ARI \\
+\midrule
+Zero & $3.55375\pm0.06726$ & $-0.00591\pm0.01049$ & 0.8514 & 0.7155 \\
+Moderate & $3.48672\pm0.06376$ & $-0.03394\pm0.01543$ & 0.9531 & 0.8673 \\
+Strong & $3.56485\pm0.10071$ & $+0.02086\pm0.02296$ & 0.9336 & 0.8177 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Moderate выиграл на всех seeds, strong проиграл на всех. Увеличение model $\nu$
+до 30/60/120 не исправило strong DGP. Уменьшение $\eta_\alpha$ монотонно
+удерживало $\alpha$ около 0.1 и улучшало NLL, что больше похоже на ограничение
+вредной interaction, чем на успешную идентификацию.
+
+\subsection{THP fixed-split, MC и InfoMax}
+
+\begin{center}
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Variant & Val purity & Test purity & ARI & 1-to-1 accuracy & Все 5 мод \\
+\midrule
+THP no-W & $0.808\pm0.010$ & $0.710\pm0.014$ & 0.507 & $0.649\pm0.016$ & 0/5 \\
+WiRE-THP & $0.819\pm0.004$ & $0.729\pm0.007$ & 0.547 & $0.656\pm0.015$ & 0/5 \\
+WiRE + InfoMax 5 & $0.810\pm0.010$ & $0.740\pm0.017$ & 0.555 & $0.705\pm0.049$ & 2/5 \\
+WiRE + InfoMax 10 & $0.811\pm0.007$ & $0.749\pm0.019$ & 0.543 & $0.723\pm0.052$ & 3/5 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Обе plain-модели использовали пять predicted components, но покрывали только
+четыре true modes. Train MC samples 2/4/8 дали val purity 0.820/0.820/0.820;
+validation MC 8--128 и test MC 16--128 также не меняли purity. Значит,
+four-mode collapse не был следствием недостаточного MC.
+
+\subsection{Two-phase COTIC: сильный, но односидовый результат}
+
+На \code{K5\_C5}: K=1 pretrain 300, expansion $1\to10$, frozen encoder,
+DPP 0.1, pruning 300--700, затем DPP $\to0$, backbone LR $0\to10^{-5}$ и
+$\rho:5\to50$. Получено val/test purity 0.995/1.000, ARI/NMI 1.000. Direct
+joint no-W/W controls дали test 0.665/0.825.
+
+\caveat{Это один dataset и один seed. Поздний all-12 использовал иной протокол:
+pretrain 10, encoder unfrozen, DPP 0, $\rho=5$. Поэтому результат доказывает
+силу двухфазной optimization geometry, а не чистый эффект Wishart.}
+
+\section{Поздние THP sweeps на \code{sin\_K5\_C5}}
+
+\subsection{Frozen backbone LR \texorpdfstring{$\times$}{x} warmup}
+
+25 seed-0 jobs: backbone LR $\{10^{-5},3\cdot10^{-5},10^{-4},3\cdot10^{-4},10^{-3}\}$
+$\times$ warmup $\{300,100,50,25,10\}$. Encoder frozen до target $K$, physical
+batch 8, accumulation 8, effective batch 64. Validation top points:
+
+\begin{center}
+\begin{tabular}{rrrrrr}
+\toprule
+Backbone LR & Warmup & Val & Val NLL & Test & ARI \\
+\midrule
+$3\cdot10^{-4}$ & 50 & 0.945 & 3.2431 & 0.910 & 0.7859 \\
+$3\cdot10^{-4}$ & 300 & 0.940 & 3.2091 & 0.910 & 0.7857 \\
+$10^{-4}$ & 300 & 0.940 & 3.2401 & 0.895 & 0.7495 \\
+$10^{-5}$ & 300 & 0.935 & 3.3018 & 0.905 & 0.7782 \\
+$3\cdot10^{-4}$ & 10 & 0.930 & 3.2155 & 0.905 & 0.7778 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Односидовый best превосходит THP no-W all-12 seed0 validation 0.920, но
+descriptive test 0.910 лишь совпадает с no-W. Это показывает улучшение basin
+selection на validation, не доказанный test gain.
+
+\subsection{\texorpdfstring{$\eta_\alpha\times$}{eta-alpha x} K=1 pretraining length}
+
+25 jobs с independently built K=1 checkpoints. Лучший validation result:
+pretrain 300, $\eta_\alpha=10^{-5}$, val/test 0.935/0.890. При той же длине
+$\eta_\alpha=10^{-4}$ дал 0.925/0.885; $10^{-3}$ --- 0.930/0.895.
+Короткий pretrain 10--100 в основном снижал val до 0.795--0.830.
+
+\verdict{Длина K=1 pretraining оказалась важнее точной настройки $\eta_\alpha$.
+В этом grid нет evidence, что быстрый alpha optimizer восстанавливает
+кластеризацию; на лучших точках $\alpha$ остаётся около 0.10--0.22.}
+
+\subsection{Big-protocol \texorpdfstring{$\beta_0=1$}{beta0=1} и
+\texorpdfstring{$\eta_\alpha$}{eta-alpha}}
+
+Здесь воспроизведён фактический общий neural optimizer all-12: backbone и heads
+всегда $10^{-3}$, exact K=1 checkpoint all-12 reused. Единственные изменения ---
+$\beta_0=1$ и $\eta_\alpha$.
+
+\begin{center}
+\begin{tabular}{rrrrrr}
+\toprule
+$\eta_\alpha$ & Val & Val NLL & Test & ARI & Best $\alpha$ \\
+\midrule
+$10^{-5}$ & 0.910 & 3.0623 & 0.885 & 0.7367 & 0.1041 \\
+$10^{-4}$ & 0.905 & 3.0660 & 0.925 & 0.8164 & 0.1378 \\
+$10^{-3}$ & 0.900 & 3.0822 & 0.900 & 0.7666 & 0.3716 \\
+$3\cdot10^{-4}$ & 0.900 & 3.0889 & 0.895 & 0.7543 & 0.2175 \\
+$3\cdot10^{-5}$ & 0.805 & 3.0675 & 0.735 & 0.5468 & 0.1123 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Validation rule выбирает $10^{-5}$. После этого для matched-DGP вручную
+зафиксировано $10^{-4}$. Это допустимый новый design choice, но его нельзя
+обосновывать более высоким test 0.925.
+
+\subsection{Overcomplete backbone LR, частичный sweep}
+
+Из 7 запланированных завершены 5. До target $K$ heads имели LR $10^{-3}$,
+backbone --- swept LR; после target backbone возвращался к $10^{-3}$ за 200
+steps. Лучшие завершённые точки: $10^{-6}$ val/test 0.870/0.835; frozen 0
+--- 0.855/0.845; $3\cdot10^{-6}$ --- 0.840/0.805. Прогон остановлен, поэтому
+он не задаёт финальную конфигурацию.
+
+\section{Matched Wishart random-effect DGP}
+
+\subsection{Почему первый DGP был невалиден}
+
+Первый full suite содержал 2000 sequences и имел почти идеальную oracle
+block-mass routing accuracy 0.998, но обе обучаемые модели collapsed в один
+cluster: val/test purity 0.2, ARI/NMI 0.0. Hidden $W$ был структурирован, но
+observable event data недостаточно отражали random effect, а K=1 cloning и
+слабая early separation не создавали usable clusters. Suite остановлен после
+2/9 jobs.
+
+\subsection{Исправленная генерация}
+
+Новый DGP сохраняет синусоидальный COTIC-like kernel, но вводит block-local
+activity. Для каждой trajectory её истинный $K\times C$ block получает
+нормированную local activity $a^{loc}$; между блоками используется global
+activity $a^{glob}$:
+\[
+p=\gamma_{in}(B\odot M_{in})a^{loc}
++\gamma_{out}(B\odot M_{out})a^{glob}.
+\]
+Финальная DGP intensity использует тот же convex transform с
+$\alpha_{true}=0.35$. Текущая постановка: $K=C=5$, 400 sequences/cluster в
+полном плане, horizon 20, $\nu_{data}=25$, baseline totals
+$[0.8,6.5,6.5,16.0,2.3]$, $\gamma_{in}=3$, $\gamma_{out}=0.25$.
+
+Full preflight на 2000 sequences до block-local gain имел mean events 123.592,
+oracle routing 0.9935, rate relative SD 0.0200, validation ridge-LDA accuracy
+0.710 и all-data k-means ARI 0.7483. Gain-3 debug data на 400 sequences имели
+mean events 171.423, rate relative SD 0.0351, ridge-LDA 0.725 и k-means ARI
+0.7038. То есть effect стал сильнее, но задача одновременно стала интенсивнее.
+
+\subsection{Gain 1/3/5 и paired результат gain 3}
+
+Preflight DGP summary:
+\begin{center}
+\begin{tabular}{rrrrr}
+\toprule
+Within gain & Rate rel. SD & Ridge-LDA acc & k-means ARI & Mean events \\
+\midrule
+1 & 0.01395 & 0.875 & 0.7864 & 134.87 \\
+3 & 0.03510 & 0.725 & 0.7038 & 171.42 \\
+5 & 0.05128 & 0.675 & 0.6546 & 212.78 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Gain 3, short COTIC, 3 seeds:
+\begin{center}
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+Seed & Val no-W & Val W & $\Delta$ val & Test no-W/W & ARI no-W/W & NLL no-W/W \\
+\midrule
+0 & 0.775 & 0.900 & +0.125 & 0.675/0.775 & 0.5196/0.6178 & 3.1214/3.1234 \\
+1 & 0.825 & 0.800 & -0.025 & 0.725/0.750 & 0.5842/0.5585 & 3.1665/3.0966 \\
+2 & 0.875 & 0.825 & -0.050 & 0.750/0.800 & 0.6040/0.6519 & 3.1119/3.1026 \\
+\midrule
+Mean & 0.825 & 0.8417 & +0.0167 & 0.7167/0.7750 & 0.5692/0.6094 & 3.1333/3.1076 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\verdict{Гипотеза получила только слабое exploratory evidence: средние purity,
+ARI и NLL лучше у Wishart, но validation sign положителен лишь на одном из трёх
+seeds. Этого недостаточно для запуска дорогого full 9-task suite как
+confirmatory benchmark.}
+
+\section{Обучаемая \texorpdfstring{$\nu$}{nu} и Monte Carlo}
+
+\subsection{Непрерывная параметризация \texorpdfstring{$\nu$}{nu}}
+
+Для learnable mode реализовано
+\[
+\nu=D+(\nu_{max}-D)\sigma(r_\nu),\qquad D<\nu<\nu_{max},
+\]
+и weak log-scale prior
+\[
+\mathcal L_\nu=\frac{\gamma_\nu}{2}
+\left(\log\frac{\nu}{\nu_0}\right)^2.
+\]
+Wishart sample строится дифференцируемым Bartlett factor: нижнетреугольные
+off-diagonal элементы standard normal, диагональ
+$\sqrt{\chi^2_{\nu-j+1}}$, реализованная через reparameterized gamma. Fixed
+integer branch оставлен byte-compatible.
+
+\rationale{Bounded sigmoid гарантирует $\nu>D$, а Bartlett decomposition
+разрешает gradient по continuous degrees of freedom. Отдельный optimizer group
+и слабый prior предотвращают мгновенный уход к границе.}
+
+\subsection{Fixed 25, fixed 37 и learned 37}
+
+\begin{center}
+\begin{tabular}{lrrrrr}
+\toprule
+Mode & Val purity & Val NLL & Test purity & Test ARI & Selected $\nu$ \\
+\midrule
+Fixed 25 & 0.8583 & 3.10216 & 0.7667 & 0.6013 & 25 \\
+Fixed 37 & 0.8500 & 3.10753 & 0.7750 & 0.6094 & 37 \\
+Learned from 37 & 0.8583 & 3.10600 & 0.7417 & 0.5684 & 37.505 mean \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+По validation rule fixed 25 выигрывает tie по purity меньшим NLL. Learned $\nu$
+по seeds выбрал 37.232, 37.809, 37.475; gradients были малы, параметр остался
+рядом со стартом.
+
+\subsection{\texorpdfstring{LR$_\nu$}{LR-nu} и train-MC samples}
+
+Seed 0: $\eta_\nu=10^{-3}$ дал val 0.850 и $\nu=37.23$;
+$3\cdot10^{-3}$ --- 0.825 и 37.84; $10^{-2}$ --- 0.825 и 40.78. Больший LR
+сдвигает $\nu$ вверх, но purity ухудшается.
+
+\begin{center}
+\begin{tabular}{rrrrrrr}
+\toprule
+$S_{train}$ & Val purity & Val NLL & Selected $\nu$ & $|g_\nu|_{max}$ & Runtime & Peak VRAM \\
+\midrule
+1 & 0.825 & 3.12222 & 37.274 & 0.01343 & 30.6 s & 1803 MiB \\
+2 & 0.825 & 3.12380 & 37.531 & 0.00893 & 32.8 s & 2029 MiB \\
+4 & 0.800 & 3.10675 & 36.985 & 0.00435 & 35.8 s & 2921 MiB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\verdict{Больше MC samples действительно уменьшает gradient noise и при
+$S=4$ улучшает validation NLL, но primary clustering metric падает. Проблема не
+объясняется только MC variance.}
+
+\section{Обоснование составных частей: итоговая матрица}
+
+\begin{longtable}{p{0.20\textwidth}p{0.33\textwidth}p{0.37\textwidth}}
+\toprule
+Составная часть & Теоретическая роль & Экспериментальный статус \\
+\midrule
+\endfirsthead
+\toprule
+Составная часть & Теоретическая роль & Экспериментальный статус \\
+\midrule
+\endhead
+K=1 pretrain & Отделить density representation от cluster allocation. & Сильный practical effect; слишком короткий pretrain ухудшает THP. \\
+Clone + noise & Сохранить scale и разрушить symmetry. & Необходим; неправильная cloning scale приводила к collapse matched-DGP. \\
+Overcomplete $K_0$ & Дать elimination запас кандидатов. & Работает на простых DAN; не гарантирует все true modes на sin-K5 THP. \\
+Shared $W_i$ & Связать routing и trajectory-level intensity effect. & NLL benefit встречается часто; clustering benefit backbone- и seed-dependent. \\
+Correlation $R$ и $B=R-I$ & Отделить связи от scale и self-effect. & Численно стабильно; само по себе не обеспечивает идентификацию. \\
+Projected $\alpha$ & Ограничить interaction и сохранить exact no-effect point. & Большой $\eta_\alpha$ часто вреден; optimum обычно близок к 0.1. \\
+Exploration $\beta_t$ & Отложить ранний basin lock-in. & Средний эффект мал; beta$_0=1$ не дал устойчивой победы. \\
+Global OT dual & Препятствовать component collapse глобально. & Критически важен; weak/incorrect setting collapsed matched-DGP. \\
+Hyperprior $\Omega$ & SPD barrier и shrinkage. & Предотвращает вырождение; learned matrices всё же могут быть анизотропны. \\
+Functional DPP & Развести клонированные heads до pruning. & Сильный в one-seed two-phase COTIC; factorized multiseed evidence отсутствует. \\
+Physical elimination & Удалять least harmful head без labels. & Даёт auditable lineage; дорого по runtime, чувствительно к representation drift. \\
+Encoder freeze & Сделать соседние pruning decisions сопоставимыми. & Улучшил отдельные THP/COTIC runs; all-12 его не использовал. \\
+Gradient accumulation & Стабилизировать global marginal при ограниченной VRAM. & Позволяет effective batch 128; memory-safe variants сохраняют семантику. \\
+MC 2/8/16/8 & Баланс variance и стоимости. & Увеличение train/eval MC purity не улучшило; retained default оправдан. \\
+Learnable $\nu$ & Адаптировать variance random effect. & Реализуемо и стабильно, но в debug не улучшило validation-selected clustering. \\
+Validation-only selection & Исключить test leakage. & Обязательный инвариант; ручная фиксация после test не считается подтверждением. \\
+\bottomrule
+\end{longtable}
+
+\section{Вычислительная среда и memory safety}
+
+Исходная реконструкция: Windows, Python 3.12.13, PyTorch 2.12.0+cu126,
+NumPy 2.3.5, pandas 2.2.3, EasyTPP 0.2.1, RTX 4060 Laptop 8188 MiB.
+All-12 использовал physical batch 16/64 и effective batch 128 без отдельного
+VRAM sampler. Поздние sweeps были закреплены за GPU 0. Они использовали physical
+batch 8, pruning batch 2, accumulation 16 и guard при sampled dedicated VRAM
+$\ge7000$ MiB.
+
+После 06.08 physical-removal scoring сначала генерирует прежнюю RNG-группу
+Wishart samples, затем строит THP traces адаптивными microbatches с budget не
+более 512 padded events; candidate scores и common-random-number semantics
+сохраняются, CUDA cache очищается между candidate copies.
+
+\rationale{Memory adaptation меняет только физическое разбиение. Effective
+batch, Wishart samples и candidate RNG остаются прежними, поэтому сравнение
+scores не превращается в другую статистическую процедуру.}
+
+\section{Ошибки протокола, исправления и источники неопределённости}
+
+\begin{enumerate}
+  \item \textbf{Metadata LR mismatch.} Config all-12 содержит backbone LR
+  $10^{-5}$, history --- $10^{-3}$. Фактический history имеет приоритет.
+  \item \textbf{Original seed-0 Wishart rows.} В старом suite использовались
+  прежние W settings; в основной таблице они заменены corrected 24/24.
+  \item \textbf{Неидеальный seed-0 pairing.} Corrected W и historical no-W
+  имеют разные K=1 checkpoints. Seeds 1--2 paired byte-identically.
+  \item \textbf{Different no-W dual LR.} Значит, all-12 W-noW --- сравнение
+  исторических variants, не чистая абляция одного слоя.
+  \item \textbf{Single-seed tuning.} Большинство Aug6--7 grids оптимизировалось
+  на seed 0; их ranking нельзя считать multiseed generalization.
+  \item \textbf{Multiple exploration.} После многих grids validation metrics
+  сами становятся объектом adaptive search; нужен fresh confirmatory seed set.
+  \item \textbf{LaL scope.} Published means --- внешняя reference; локальный
+  BOS-control неполон и не заменяет LaL random walk.
+\end{enumerate}
+
+\section{Рекомендуемый следующий подтверждающий эксперимент}
+
+Новый дорогой sweep сейчас не оправдан. Если работу продолжать, минимальный
+научно чистый протокол должен быть следующим:
+
+\begin{enumerate}
+  \item Зафиксировать один matched gain-3 DGP generator до обучения и сохранить
+  data hashes; не менять DGP после просмотра metrics.
+  \item Сравнить только no-W и W с exact shared K=1 checkpoint, одинаковыми
+  neural/dual LRs, batch/RNG schedule и без test-guided tuning.
+  \item Зафиксировать W: $\eta_\alpha=10^{-4}$ как заранее объявленный design,
+  $\nu=25$ fixed, $S_{train/val/test}=2/8/16$, $\beta_0=1$.
+  \item Использовать минимум 10 fresh model seeds; primary endpoint --- paired
+  validation purity W-noW, secondary --- ARI/NMI/NLL. Test открыть один раз
+  после заморозки анализа.
+  \item Отдельно, а не в том же comparison, проверить two-phase freeze+DPP,
+  чтобы не смешивать effect Wishart с effect optimization geometry.
+  \item Полный LaL comparison называть таковым только после реализации его
+  random-walk/split-delete protocol; до этого использовать термин
+  ``LaL-style fixed-K BOS control''.
+\end{enumerate}
+
+\section{Артефакты и воспроизводимость}
+
+\subsection{Главные источники all-12}
+\sourcepath{artifacts/dan_all12_best_elimination_corrected_seed0_20260805/summary.csv}
+\sourcepath{artifacts/dan_all12_best_elimination_seed0_20260804/summary.csv}
+\sourcepath{artifacts/dan_all12_best_elimination_seeds1_2_20260805/summary.csv}
+\sourcepath{scripts/run_two_phase_all12_benchmark.py}
+\sourcepath{artifacts/dan_all_arch_newwishart_beta_cotic7_seed0_20260802/PUBLISHED_DAN_PURITY.csv}
+
+Для точного THP \code{sin\_K5} источниками являются
+\code{config.json}, \code{history.csv}, \code{progress.json},
+\code{pruning\_events.json} и \code{result.json} внутри соответствующего
+run directory. При конфликте фактического LR используются history/progress.
+
+\subsection{Отчёты предшествующих фаз}
+\sourcepath{REPRODUCTION_REPORT_20260801.md}
+\sourcepath{SIGNED_EXPERIMENT_REPORT_20260801.md}
+\sourcepath{THP_WISHART_OPTUNA_EXPLORATION_REPORT_20260802.md}
+\sourcepath{THP_WISHART_SPLIT42_EPOCHWISE_REPORT_20260802.md}
+\sourcepath{COTIC_TWO_PHASE_WIRE_REPORT_20260803.md}
+
+\subsection{Поздние sweeps и matched DGP}
+\sourcepath{artifacts/dan_sin_k5_thp_frozen_backbone_lr_warmup_seed0_20260806/sweep_summary.csv}
+\sourcepath{artifacts/dan_sin_k5_thp_frozen_lr_alpha_pretrain_seed0_20260806/sweep_summary.csv}
+\sourcepath{artifacts/dan_sin_k5_thp_big_protocol_beta1_lr_alpha_seed0_20260807/sweep_summary.csv}
+\sourcepath{configs/experiments/wishart_re_sin_k5_cotic_comparison.json}
+\sourcepath{artifacts/_debug_wishart_re_blocklocal_gain3_preflight_20260807/dgp_audit.json}
+\sourcepath{artifacts/_debug_wishart_re_blocklocal_gain3_preflight_20260807/summary.csv}
+\sourcepath{artifacts/_debug_wishart_re_gain3_nu_fixed25_20260807/summary.csv}
+\sourcepath{artifacts/_debug_wishart_re_gain3_nu_learned37_20260807/summary.csv}
+\sourcepath{artifacts/_debug_wishart_re_gain3_nu_learned37_mc4_val8_20260807/summary.csv}
+
+\subsection{Реализация алгоритма}
+\sourcepath{src/lal_wishart/models/wishart_math.py}
+\sourcepath{src/lal_wishart/models/signed_wishart.py}
+\sourcepath{src/lal_wishart/models/latent_wishart_attention_nhp.py}
+\sourcepath{src/lal_wishart/train/fit_latent_wishart_attention_nhp.py}
+\sourcepath{src/lal_wishart/reproduction/wishart_re_sin_k5c5.py}
+\sourcepath{scripts/run_wishart_re_sin_k5_cotic_comparison.py}
+
+\section{Финальный вывод}
+
+\verdict{Главный положительный результат проекта --- не универсальный clustering
+gain, а воспроизводимая и технически целостная процедура trajectory-level
+Wishart marginalization, physical elimination и validation-only selection.
+Predictive NLL нередко улучшается. Однако clustering advantage зависит от
+backbone, initialization и DGP; на THP \code{sin\_K5} Wishart может ухудшать
+результат, а matched-DGP gain остаётся нестабильным по seeds. Поэтому текущий
+научно корректный вывод --- отрицательный/неопределённый, а не ``Wishart лучше''.
+Следующий шаг должен быть один заранее зарегистрированный paired multiseed
+эксперимент, а не очередной seed-0 sweep.}
+
+\end{document}
