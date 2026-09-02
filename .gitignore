@@ -1,7 +1,18 @@
 .venv/
+.idea/
 .mplconfig/
+.ruff_cache/
+$build/
+debug.log
 tmp/
+artifacts/
+output/
+outputs/
+data/
+runs/
 *.egg-info/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.coverage
 

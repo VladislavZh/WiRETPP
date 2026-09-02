@@ -1,1 +1,0 @@
-from .cotic import COTIC

@@ -1,0 +1,47 @@
+model:
+  backbone: cotic
+  input_channels: 32
+  hidden_size: 64
+  layers: 7
+  attention_heads: 4
+  use_layer_norm: true
+  kernel_size: 3
+  dropout: 0.1
+  dilation_factor: 1.29
+  integral_method: monte_carlo
+  integral_samples: 50
+  integral_seed: 0
+  component_noise: 0.02
+  wishart_intensity_floor: 0.000001
+  wishart_intensity_floor_scaling: constant
+
+training:
+  method: pure
+  shared_pretrain_steps: 10
+  pure_steps: 600
+  active_cycles: 75
+  neural_steps_per_cycle: 8
+  balanced_cycles: 10
+  effective_batch_size: 256
+  batch_size: 256
+  evaluation_batch_size: 128
+  evaluation_sample_shard_size: 64
+  path_shard_size: 1024
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  gradient_clip: 500.0
+  reduce_lr_on_plateau: false
+
+runtime:
+  data_root: data
+  output_root: runs/dan12_pure_balanced10_p99_75cycle_seed0
+  shared_checkpoint_root: runs/dan12_common_p99_75cycle_seed0/wishart
+  dataset: all12
+  accelerator: cuda
+  precision: 32-true
+  split_seed: 42
+  optimization_seed: 0
+  monte_carlo_seed: 0
+  deterministic: true
+  mixture_components: 5
+  packed_filename: events.parquet

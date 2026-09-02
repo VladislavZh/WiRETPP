@@ -1,366 +1,338 @@
-# Shared-encoder latent-Wishart mixtures for neural TPPs
+# Active Block Wishart TPP
 
-Этот репозиторий — самодостаточный snapshot последней ревизии эксперимента.
-Здесь оставлено только сравнение одной и той же непрерывновременной TPP-модели
-в трёх архитектурах (NHP, THP, COTIC), двух параметризациях кластеров
-(`output_split`, `lal_fixed`) и двух вариантах objective (`no-W`, latent
-Wishart). Предыдущие grid-, GP-Wishart-, MAP-​W-, Wishart-only- и random-walk
-пилоты намеренно удалены.
+Исследовательская реализация иерархической смеси временных точечных
+процессов с trajectory-level Wishart random effect. Метод реализован как
+обёртка над произвольным нейросетевым банком интенсивностей, а не как
+расширение конкретной архитектуры.
 
-Главный результат лежит в
-[`artifacts/corrected_shared_wishart_output_vs_lal_fixed_300ep_seed0`](artifacts/corrected_shared_wishart_output_vs_lal_fixed_300ep_seed0).
-Там находятся конфигурация, все 12 чекпойнтов, истории обучения, posterior
-probabilities, learned Wishart means, сырые метрики и SHA-256 manifest.
+Поддерживаемые backbone:
 
-## Сводный протокол экспериментов 2026-08-07
+- `cotic` — continuous convolution из
+  [VladislavZh/COTIC](https://github.com/VladislavZh/COTIC);
+- `thp`, `nhp`, `rmtpp` — реализации
+  [EasyTPP](https://github.com/ant-research/EasyTemporalPointProcess),
+  зафиксированные на `easy-tpp==0.2.1`, как в исходных экспериментах.
 
-Полная ретроспектива экспериментов, corrected all-12 benchmark, точный алгоритм
-обучения, фактически применённые метапараметры, обоснование всех составных
-частей и разбор отрицательных результатов собраны в итоговом протоколе:
+Один и тот же код Active Block Wishart, variational inference и обучения
+используется со всеми backbone. Отличается только adapter, создающий банк
+положительных интенсивностей `K x C`.
 
-- [PDF-отчёт](output/pdf/wire_tpp_experiment_protocol_all12_20260807.pdf);
-- [LaTeX-исходник](output/pdf/wire_tpp_experiment_protocol_all12_20260807.tex).
+Подробный вывод модели и каждого шага алгоритма находится в
+[docs/MATHEMATICS.md](docs/MATHEMATICS.md).
+Порядок независимого аудита реализации находится в
+[docs/CODE_AUDIT.md](docs/CODE_AUDIT.md).
+Формулы в `MATHEMATICS.md` предварительно отрендерены в локальные SVG, поэтому документ
+не зависит от поддержки MathJax конкретным Markdown preview. Для изменения
+формул редактируется `docs/MATHEMATICS_SOURCE.md`, после чего выполняется:
 
-Протокол охватывает 144 запуска corrected all-12 по трём seeds, последующие
-THP/COTIC ablations, frozen-backbone и alpha sweeps, matched Wishart-effect DGP,
-обучаемую степень свободы `nu` и Monte Carlo ablations. Главный вывод
-отрицательный: устойчивое общее преимущество Signed-Wishart по кластеризации не
-подтверждено; небольшой средний выигрыш COTIC зависит от backbone и seed, а THP
-в среднем немного уступает no-W. В отчёте отдельно отмечено расхождение между
-исторической metadata `backbone_learning_rate=1e-5` и фактическим общим neural
-optimizer с LR `1e-3`, зафиксированным в `history`/`progress`.
+```bash
+python scripts/render_mathematics.py
+```
 
-## Что именно сравнивается
+## Что находится в репозитории
 
-Данные имеют (K=3) скрытых класса и (C=5) типов событий. Для каждой из
-архитектур NHP/THP/COTIC сравниваются две способы получить (K) компонент:
+```text
+configs/
+  all12.yaml                 конфигурация базового all-12 schedule
+scripts/
+  pack_data.py               проверенная упаковка CSV-наборов в Parquet
+  run_real_benchmark.py      matched COTIC/Pure/Wishart real-data protocol
+  render_mathematics.py      сборка формул документации
+src/wishart_tpp/
+  backbones/                 общий API и adapters COTIC/EasyTPP
+  cotic/                     локальная читаемая реализация COTIC
+  model/                     TPP trace, Wishart math, active-block decoder
+  inference/                 local VI, responsibilities, Omega и alpha M-steps
+  training/
+    experiment.py           абстрактный ExperimentRunner template
+    shared_pretrain.py      общий resumable K=1 pretrain
+    pure_branch.py          matched COTIC K=1 и Pure K=5 ветви
+    wishart_branch.py       fixed-q Wishart ветвь
+    cycle_checkpoint.py     exact cycle-boundary persistence
+    pure_experiment.py      отдельный PureExperimentRunner
+    wishart_experiment.py   отдельный WishartExperimentRunner
+    active.py               явный variational-EM цикл Lightning Fabric
+  data.py                    единый data module, split и train-only нормализация
+  data_adapters.py           только прослойки несовместимых raw-форматов
+tests/                       только проверки реальных точек отказа
+```
 
-1. `output_split` — основной вариант. Существует ровно один encoder и один
-   общий history state (h(t)). Только последний intensity head расширен с
-   (C=5) до (K C=15) выходов. Блок (5k:5(k+1)) задаёт базовую
-   интенсивность компоненты (k). Никаких трёх полных сетей нет.
-2. `lal_fixed` — контроль, близкий к LaL. Encoder и (C)-мерный decoder общие,
-   а кластерным является только начальное состояние CT-LSTM в NHP или BOS
-   embedding в THP/COTIC. Модель инициализируется двумя multiplicative LaL
-   splits из (K=1) в (K=3), затем (K) фиксирован. Split/merge/delete
-   random walk во время обучения не используется.
+Модули разделены по математической ответственности. Базовый `ExperimentRunner`
+не знает деталей Pure или Wishart: его наследники реализуют собственный
+training/evaluation path, а CLI создаёт ровно один выбранный runner. Полный
+Variational-EM сосредоточен в `training/active.py`; exact-resume, обучение
+ветвей, selected evaluation и запись артефактов вынесены в отдельные сущности.
 
-Каждая параметризация обучается:
+## Модель в одной формуле
 
-- как обычная конечная смесь (`no_wishart`);
-- с общей латентной Wishart-распределённой attention matrix
-  (`latent_wishart_attention`).
+Backbone с параметрами `theta` выдаёт базовые интенсивности
 
-Это сравнение одной сети с расширенным выходом против LaL-параметризации, а не
-сравнение трёх независимо обучаемых нейросетей. Файл
-`architecture_audit.csv` подтверждает один encoder во всех 12 моделях; Wishart
-добавляет ровно (15^2=225) параметров learned mean и не добавляет encoder.
+```text
+h_theta,k(t | H_t) in R_+^C,  k=1,...,K.
+```
+
+Для траектории `m`:
+
+```text
+z_m ~ Categorical(pi)
+U_m | z_m=k ~ Wishart_C(nu, Omega_k / nu)
+T_U(h) = [U_m^(1/2) sqrt(h_theta,k(t))]^2
+lambda_m(t) = (1-alpha) h_theta,k(t) + alpha T_U(h_theta,k(t)) + 1e-6.
+```
+
+Смесь интерполируется в пространстве интенсивностей, а не амплитуд. При
+`alpha=0` получается точный no-W/Pure Mixture endpoint с тем же постоянным
+floor `1e-6`. Веса компонентов `pi` являются независимыми обучаемыми
+параметрами: они никогда не извлекаются из `U`. Pure и Wishart
+запускаются отдельно, но при одинаковых seed и конфигурации воспроизводят
+один и тот же короткий стартовый checkpoint.
+
+## Установка
+
+Рекомендуется Python 3.11 и отдельное окружение.
+
+```bash
+python -m venv .venv
+.venv/Scripts/activate             # Windows
+pip install -e .
+```
+
+Для Linux/macOS команда активации — `source .venv/bin/activate`.
+
+PyTorch можно заранее установить с подходящим CUDA wheel. `Lightning
+Fabric` используется только как тонкий слой над явным training loop:
+setup устройства/precision, backward и gradient clipping. Lightning Trainer,
+callbacks и LightningModule здесь отсутствуют.
 
 ## Данные
 
-Генератор воспроизводит трёхкомпонентный пятиразмерный exponential Hawkes DGP.
-Для класса (z) интенсивность типа (c) равна
-
-\[
-\lambda^{(z)}_c(t)=\mu^{(z)}_c+
-\sum_{t_i<t}\alpha^{(z)}_{c,m_i}\beta^{(z)}_{c,m_i}
-\exp[-\beta^{(z)}_{c,m_i}(t-t_i)].
-\]
-
-Параметры трёх классов генерируются один раз с `parameter_seed=20260746`, а
-траектории — с `simulation_seed=20260747`. Горизонт фиксирован: (T=9.4),
-число событий не нормируется и не фиксируется. В 1200 сгенерированных путях
-среднее число событий равно 49.768 (диапазон 4–151). Разбиение с
-`split_seed=20260748` стратифицировано по истинному классу:
-
-- train: 90 путей, по 30 на класс;
-- validation: 45, по 15;
-- test: 1065, по 355.
-
-Истинные labels используются только для финальных clustering metrics, не при
-обучении и не при выборе чекпойнта. Полный аудит DGP записан в
-`data_audit.json` внутри artifact-каталога.
-
-## Обычная смесь без Wishart
-
-Пусть нейросеть задаёт (K) положительных marked intensities
-
-\[
-\lambda_{\theta,k,c}(t\mid\mathcal H_t)>0.
-\]
-
-Для траектории (X=\{(t_i,c_i)\}_{i=1}^n) component log likelihood —
-классический непрерывновременной TPP likelihood:
-
-\[
-\ell_k(X)=\sum_i\log\lambda_{\theta,k,c_i}(t_i\mid\mathcal H_{t_i})
--\int_0^T\sum_{c=1}^{C}\lambda_{\theta,k,c}(t\mid\mathcal H_t)\,dt.
-\]
-
-Интеграл считается Gauss–Legendre quadrature порядка 8 на каждом межсобытийном
-интервале. Терминальный интервал от последнего события до (T) включён.
-Смешивающие веса π обучаются через `softmax(mixture_logits)`, поэтому
-
-\[
-\log p_0(X)=\operatorname{logsumexp}_k[\log\pi_k+\ell_k(X)].
-\]
-
-Это полностью дифференцируемое совместное обучение; отдельного EM E-step в
-коде нет. Posterior responsibility для кластеризации вычисляется уже из
-нормализованного joint score.
-
-## Латентная Wishart-attention
-
-Обозначим (D=KC=15). Для каждой траектории существует новая латентная
-матрица
-
-\[
-W\sim\operatorname{Wishart}_{D}(\nu,M/\nu),\qquad
-\nu=20,\qquad \mathbb E[W]=M.
-\]
-
-Это не обучаемая матрица на каждую траекторию и не процесс (W(t)). Обучается
-только глобальный параметр распределения (M\in\mathbb S_{++}^{15}). Пусть
-
-\[
-M_0=LL^\top,\qquad
-M=D\,M_0/\operatorname{tr}(M_0),
-\]
-
-где нижний треугольник (L) свободен, а его диагональ проходит через
-`softplus + 1e-5`. Trace constraint устраняет неидентифицируемый общий scale.
-Для reparameterized sample берутся (G_s\in\mathbb R^{\nu\times D}) с
-независимыми (N(0,1)) элементами:
-
-\[
-W_s=(G_sL^\top/\sqrt\nu)^\top(G_sL^\top/\sqrt\nu).
-\]
-
-### Как (W) входит в intensity
-
-Из (W) строится correlation matrix и неотрицательная attention:
-
-\[
-R_{ab}=\frac{W_{ab}}{\sqrt{W_{aa}W_{bb}}},\qquad
-A_{ab}=\frac{R_{ab}^{2}}{\sum_jR_{jb}^{2}}.
-\]
-
-Столбцы (A) суммируются в единицу. Поэтому attention перераспределяет
-интенсивность между всеми (K\times C) каналами, включая cross-type и
-cross-cluster связи, но сохраняет их суммарный instantaneous scale:
-
-\[
-\widetilde{\boldsymbol\lambda}(t;W)
-=A(W)\boldsymbol\lambda_\theta(t),\qquad
-\sum_a\widetilde\lambda_a(t;W)=\sum_a\lambda_a(t).
-\]
-
-Квадрат корреляции нужен потому, что intensity routing должен быть
-неотрицательным, тогда как допустимая positive-definite (W) может иметь
-отрицательные off-diagonal элементы. В этой реализации отрицательных
-интенсивностей после умножения не возникает.
-
-Одновременно diagonal block mass задаёт cluster prior:
-
-\[
-p(z=k\mid W)=
-\frac{\sum_{c=1}^{C}W_{(k,c),(k,c)}}{\operatorname{tr}(W)}.
-\]
-
-Для фиксированных (W,z=k) используется тот же classical TPP likelihood, но
-с (\widetilde\lambda_{k,c}(t;W)). Латентный кластер суммируется точно, а (W)
-интегрируется Monte Carlo:
-
-\[
-\widehat{\log p_W(X)}=
-\log\left[\frac1S\sum_{s=1}^{S}\sum_{k=1}^{K}
-p(k\mid W_s)\exp\ell_k(X\mid W_s)\right].
-\]
-
-Важно: это не ELBO и variational distribution (q(W\mid X)) здесь нет.
-Также это не closed-form objective: лог-маргинал аппроксимируется
-reparameterized Monte Carlo; `log` от конечного sample average имеет обычное
-MC-смещение. Train/validation/test используют соответственно (S=4/16/64),
-а итоговый stability audit — три независимых повтора с (S=256).
-
-Для стабилизации learned mean используется identity-centered penalty
-
-\[
-\mathcal R(M)=\frac{\tau}{2}
-[\operatorname{tr}(M)-\log\det M-D],\qquad \tau=1.
-\]
-
-При trace normalization он минимален в (M=I).
-
-## Как обучается модель
-
-Для каждого из шести сочетаний architecture × parameterization создаётся одна
-общая инициализация; её глубокие копии идут в no-W и Wishart branches.
-
-No-W branch:
-
-1. Берётся minibatch траекторий.
-2. Для каждой компоненты строятся event log-intensity и quadrature compensator.
-3. Кластеры маргинализуются `logsumexp`.
-4. Adam обновляет neural parameters и `mixture_logits` с `lr=0.001`.
-
-Wishart branch:
-
-1. Строятся все (KC) базовых intensity channels общей сети.
-2. Для каждой траектории и каждого из (S=4) samples генерируется fresh (W_s).
-3. (W_s) используется и как attention, и для (p(z\mid W_s)).
-4. Считается MC log-marginal выше плюс ℛ(M)/90.
-5. Один Adam optimizer обновляет neural parameters с `lr=0.001`, weight decay
-   `1e-5`, а raw Cholesky (M) — с отдельным `lr=0.01`, без weight decay.
-6. Общий gradient norm clipping равен 20.
-
-`backbone.mixture_logits` в Wishart branch намеренно не оптимизируется: cluster
-prior там целиком задаётся (W). Никаких local (W_m), test-time fitting,
-KMeans, E-step или LaL random walk нет.
-
-Обучение длится 300 эпох, batch size 90 (то есть весь train), validation
-проводится каждые 5 эпох. Выбирается checkpoint с минимальным validation
-conditional suffix NLL. Cutoff равен 4.7, ровно половине горизонта.
-
-## Метрики
-
-`full marginal NLL/exposure` — минус полный log marginal, поделённый на
-(N_{test}T).
-
-`suffix NLL/exposure` проверяет prediction без утечки из будущего:
-
-\[
-\log p(X_{[4.7,9.4)}\mid X_{[0,4.7)})
-=\log\sum_{s,k}p(W_s,z=k\mid X_{prefix})
-p(X_{suffix}\mid W_s,z=k,X_{prefix}).
-\]
-
-Кластер — `argmax` posterior probability после маргинализации (W). Purity —
-стандартная доля majority true label внутри каждого predicted cluster; рядом
-обязательно смотрятся ARI и `active_k`, потому что purity сама по себе не
-штрафует некоторые вырождения достаточно сильно. `prefix_half` использует
-только первую половину, `full_sequence` — весь путь.
-
-## Итоговые результаты
-
-Ниже no-W значения взяты из детерминированной оценки сохранённого checkpoint,
-Wishart — среднее трёх fresh-​W прогонов по 256 samples.
-
-| architecture | parameterization | no-W suffix NLL | W suffix NLL | no-W purity / ARI | W purity / ARI |
-|---|---|---:|---:|---:|---:|
-| NHP | output-split | 3.551045 | 3.460095 | 0.9418 / 0.8351 | 0.9243 / 0.7947 |
-| NHP | LaL-fixed | 3.577608 | 3.471363 | 0.4977 / 0.1038 | 0.9243 / 0.7936 |
-| THP | output-split | 3.628967 | 3.463962 | 0.8789 / 0.6826 | 0.9509 / 0.8601 |
-| THP | LaL-fixed | 3.535851 | 3.482394 | 0.5136 / 0.1062 | 0.9352 / 0.8177 |
-| COTIC | output-split | 3.899844 | 3.636450 | 0.3333 / 0.0000 | 0.9427 / 0.8392 |
-| COTIC | LaL-fixed | 3.872938 | 3.659475 | 0.4000 / 0.0126 | 0.8923 / 0.7268 |
-
-Во всех 18 stability-evaluations Wishart использовал три активных кластера;
-SD suffix NLL меньше 0.001. Wishart улучшил predictive suffix NLL во всех
-шести paired comparisons. В NHP/output-split no-W кластеризует немного лучше,
-поэтому утверждение «Wishart всегда лучше по purity» не делается.
-
-## Воспроизведение
-
-Проверенная среда: Python 3.11, PyTorch 2.12, NumPy 2.3.5, pandas 2.2.3,
-EasyTPP wheel 0.2.1. COTIC source vendored из
-`VladislavZh/COTIC@362b8ab1f3cbb9e9dced2518e9daacf68235e77a`.
-
-Windows PowerShell:
-
-```powershell
-py -3.11 -m venv .venv
-.venv\Scripts\python -m pip install --upgrade pip
-.venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python -m pip install easy-tpp==0.2.1 --no-deps
-.venv\Scripts\python -m pip install -e . --no-deps
-$env:PYTHONPATH='src;scripts'
-.venv\Scripts\python scripts/verify_artifacts.py
-```
-
-`--no-deps` для EasyTPP намерен: финальный код использует только THP и
-`ModelConfig`; нерелевантные `datasets` и `tensorboard` в этом эксперименте не
-нужны. Их runtime-зависимости (`omegaconf`, `PyYAML`, `packaging`) уже явно
-зафиксированы. Linux/macOS эквивалентен (`.venv/bin/python`,
-`export PYTHONPATH=src:scripts`).
-Для CUDA сначала можно поставить подходящий PyTorch wheel, затем остальные
-зависимости. Чекпойнты device-independent и загружаются на CPU.
-
-Быстрый smoke run всех веток:
-
-```powershell
-.venv\Scripts\python scripts/run_corrected_shared_wishart_architectures.py `
-  --quick --device cpu --outdir artifacts/smoke
-```
-
-Полное повторение (нужна CUDA; исходный прогон занял около 17 минут на
-использованном устройстве):
-
-```powershell
-.venv\Scripts\python scripts/run_corrected_shared_wishart_architectures.py `
-  --device cuda --epochs 300 `
-  --outdir artifacts/corrected_shared_wishart_output_vs_lal_fixed_300ep_seed0
-
-.venv\Scripts\python scripts/audit_corrected_shared_wishart_mc.py `
-  --device cuda --samples 256 --repeats 3 `
-  --artifact artifacts/corrected_shared_wishart_output_vs_lal_fixed_300ep_seed0
-```
-
-Повторный запуск в основной artifact-каталог перезапишет результаты. Для
-проверки переноса сначала используйте другой `--outdir`. Seeds и все
-гиперпараметры находятся также в `config.json`. CUDA/BLAS версии исходного
-устройства не были записаны, поэтому bit-for-bit совпадение на другом GPU не
-гарантируется; структура вывода и статистический результат воспроизводимы.
-
-## Структура репозитория
+Рабочий формат хранит одну строку Parquet на траекторию:
 
 ```text
-.
-├── README.md                         # теория, алгоритм, команды и результаты
-├── pyproject.toml                    # src-layout package metadata
-├── requirements.txt                 # зафиксированные Python-зависимости
-├── artifacts/
-│   └── corrected_shared_wishart_output_vs_lal_fixed_300ep_seed0/
-│       ├── config.json               # полный протокол эксперимента
-│       ├── environment.json          # версии и граница воспроизводимости
-│       ├── data_audit.json           # DGP и статистика данных
-│       ├── FINAL_COMPARISON.csv      # главная компактная таблица
-│       ├── nll.csv                   # первичная NLL-оценка
-│       ├── clustering.csv            # purity/ARI/NMI/entropy/active K
-│       ├── architecture_audit.csv    # один encoder и размеры heads
-│       ├── distribution_diagnostics.csv
-│       ├── mc_stability_256x3*.csv   # fresh-W аудит
-│       ├── checkpoints/              # 12 state_dict
-│       ├── histories/                # validation traces
-│       ├── learned_means/            # шесть M в long CSV
-│       ├── predictions/              # posterior probabilities на test
-│       ├── REPORT.md                 # автоматически собранный отчёт
-│       └── MANIFEST.sha256            # целостность artifact
-├── scripts/
-│   ├── run_corrected_shared_wishart_architectures.py
-│   ├── audit_corrected_shared_wishart_mc.py
-│   └── verify_artifacts.py
-├── src/lal_wishart/
-│   ├── experiment.py                 # DGP splits, tables, manifest
-│   ├── metrics.py                    # purity, ARI, NMI без sklearn
-│   ├── data/                         # marked sequences и Hawkes primitives
-│   ├── reproduction/paper_k3c5.py    # точный synthetic DGP
-│   ├── models/
-│   │   ├── neural_hawkes.py          # CT-LSTM/NHP
-│   │   ├── reference_*               # shared NHP/THP/COTIC + LaL states
-│   │   ├── wishart_math.py            # attention, gates, MC posterior
-│   │   └── latent_wishart_attention_*.py
-│   └── train/fit_latent_wishart_attention_nhp.py
-├── reference/COTIC/                  # минимальный vendored upstream snapshot
-└── tests/                            # unit/smoke tests последней модели
+data/
+  sin_K4_C5/
+    events.parquet
 ```
 
-## Где продолжать эксперименты
+Строка содержит `source_id`, `label`, `horizon` и вложенные массивы
+`times/marks`. Для official real-data наборов вместо `label/horizon` хранится
+исходный `split`; это единственная несовместимость, изолированная в raw-format
+адаптере. После чтения все наборы проходят один `EventDataModule`: split
+фиксируется до статистик, train-only P99 exponential normalizer оценивается
+одинаково для synthetic, Age и real, затем одна трансформация применяется к
+train/validation/test. Legacy-раскладка из отдельных CSV пока читается для
+миграции. Упаковщик пишет
+во временный файл, сверяет типизированный SHA-256 и лишь затем, при явном флаге,
+удаляет CSV:
 
-Чтобы менять способ, которым (W) превращается в attention или cluster gate,
-начинайте с `src/lal_wishart/models/wishart_math.py`. Распределение (W), trace
-normalization и sampling находятся в `latent_wishart_attention_nhp.py`.
-Архитектурные heads — в `reference_output_mixtures.py`, LaL controls — в
-`reference_neural_lal.py` и `reference_bos_lal.py`, objective/checkpoint
-selection — в `fit_latent_wishart_attention_nhp.py`. Основной runner содержит
-только orchestration и сохранение результатов.
+```bash
+python scripts/pack_data.py K2_C5 sin_K2_C5 --root data --delete-source
+```
+
+Amazon защищён от случайной упаковки без `--allow-amazon`, чтобы не менять
+источник данных работающего процесса. Synthetic DAN и Age split воспроизводят
+прежний протокол буквально, но теперь до общей нормировки:
+
+```python
+indices = numpy.arange(N)
+numpy.random.RandomState(42).shuffle(indices)
+train, validation, test = indices[:80%], indices[80%:90%], indices[90%:]
+```
+
+Для каждой траектории общий normalizer стабильно сортирует события в raw-адаптере,
+сдвигает первое событие в ноль и умножает времена и оставшийся observation horizon
+на один train-only коэффициент. Validation и test не участвуют ни в unit detection,
+ни в P99, ни в оценке exponential rate.
+
+## Запуск
+
+Актуальный matched real-data протокол для seed 1 или 2:
+
+```powershell
+$env:PYTHONPATH="src"
+python scripts/run_real_benchmark.py --dataset retweet --seed 1
+python scripts/run_real_benchmark.py --dataset amazon --seed 1
+python scripts/run_real_benchmark.py --dataset so --seed 1
+```
+
+Он создаёт общий K=1 checkpoint, непрерывную COTIC K=1 ветвь, независимую
+Pure K=5 ветвь и fixed-q Wishart K=5 ветвь на одной matched-сетке обновлений.
+`configs/real_data.yaml` фиксирует научные настройки, а compute-only shards
+выбираются по dataset и могут быть уменьшены без изменения effective batch.
+
+Базовый Wishart all-12 протокол:
+
+```bash
+wishart-tpp --config configs/all12.yaml
+```
+
+Отдельный Pure-прогон:
+
+```bash
+wishart-tpp --config configs/all12.yaml --method pure
+```
+
+Один запуск всегда обучает только выбранный `training.method`. Режима
+`Pure EM` нет: соответствующая endpoint-абляция запускается через тот же
+Wishart schedule с фиксированной нулевой силой смешивания:
+
+```bash
+wishart-tpp --config configs/all12.yaml --method wishart --fixed-alpha 0
+```
+
+Или без editable entry point:
+
+```bash
+PYTHONPATH=src python -m wishart_tpp.cli --config configs/all12.yaml
+```
+
+В PowerShell эквивалентная команда:
+
+```powershell
+$env:PYTHONPATH="src"
+python -m wishart_tpp.cli --config configs/all12.yaml
+```
+
+Backbone меняется без изменения алгоритма:
+
+```bash
+wishart-tpp --config configs/all12.yaml --backbone thp
+wishart-tpp --config configs/all12.yaml --backbone nhp
+wishart-tpp --config configs/all12.yaml --backbone rmtpp
+```
+
+Можно ограничить запуск одним набором:
+
+```bash
+wishart-tpp --config configs/all12.yaml \
+  --dataset sin_K4_C5 \
+  --backbone cotic \
+  --output-root runs/debug
+```
+
+Метод интегрирования компенсатора выбирается независимо от backbone:
+
+```bash
+wishart-tpp --config configs/all12.yaml \
+  --integral-method monte_carlo \
+  --integral-samples 20
+```
+
+Во время обучения равномерные MC-точки пересэмплируются, а validation/test
+используют фиксированный `integral_seed`. Это сохраняет стохастический training
+objective, но не позволяет шуму интеграла выбирать checkpoint.
+
+## Базовый schedule
+
+`configs/all12.yaml` фиксирует восстановленный production EM-режим, от которого
+строятся дальнейшие schedule-эксперименты:
+
+- общий checkpoint: 10 Pure minibatch-шагов;
+- Pure при `method: pure`: ещё 600 neural steps;
+- Wishart при `method: wishart`: 75 outer cycles по 8 neural steps;
+- local Wishart VI: 10 шагов, 4 train-сэмпла, 8 evaluation-сэмплов;
+- `df=16` фиксирован, `alpha` стартует с `0.1`;
+- exact trace-constrained target для `Omega` с damping `0.25`;
+- полный bounded search `alpha` на `[0,1]` с damping `0.5`;
+- independent mixture weights обновляются по responsibilities с damping `0.25`;
+- balanced responsibilities только первые 2 цикла;
+- один persistent Adam для neural M-step;
+- полный train или один детерминированный EM block без posterior cache;
+- COTIC compensator использует 50 Monte Carlo time samples;
+- checkpoint выбирается только по validation prior-predictive NLL.
+
+Следующие модификации не входят в поддерживаемый код:
+
+- обучение population `df`;
+- повторного E-step после изменения `alpha`;
+- удлинённого local warm-up;
+- early stopping;
+- auxiliary loss.
+
+Таким образом, конфигурация задаёт общую воспроизводимую точку отсчёта, а не
+устаревшую версию модели.
+
+## Результаты запуска
+
+Артефакты разных методов не пересекаются. Pure создаёт:
+
+```text
+runs/all12/pure/<dataset>/
+  shared_checkpoint.pt
+  pure_checkpoint.pt
+  shared_history.csv
+  pure_history.csv
+  result.json
+```
+
+Wishart создаёт:
+
+```text
+runs/all12/wishart/<dataset>/
+  shared_checkpoint.pt
+  wishart_checkpoint.pt
+  shared_history.csv
+  wishart_history.csv
+  result.json
+```
+
+В `result.json` записываются только метрики выбранного метода:
+
+- Pure/no-W test NLL, purity и ARI для Pure;
+- prior-predictive test NLL, purity и ARI для Wishart;
+- test-only posterior clustering и `alpha` только для Wishart;
+- полная конфигурация и размеры split.
+
+Test не участвует в выборе checkpoint.
+
+## Как добавить новый backbone
+
+Нужно реализовать один класс `IntensityBank`:
+
+```python
+class MyBank(IntensityBank):
+    n_components: int
+    n_marks: int
+    mixture_logits: torch.nn.Parameter
+
+    def expand_components(self, count, noise, seed): ...
+    def forward(self, sequences) -> TPPTrace: ...
+```
+
+`TPPTrace` содержит только то, что требуется обычному marked-TPP likelihood:
+
+- интенсивности в наблюдённых событиях, shape `events x K x C`;
+- интенсивности в точках численного интегрирования, shape `points x K x C`;
+- marks, path indices и веса интегрирования.
+
+Active decoder не знает, были эти интенсивности получены свёрткой,
+Transformer, CT-LSTM или RNN.
+
+Для state-based моделей есть более узкий `StateIntensityBank`: adapter задаёт
+только кодирование истории и отображение `(state, elapsed) -> K x C`.
+
+## Тесты
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -v
+```
+
+Проверяются точки, где реализация действительно может сломаться:
+
+- точный DAN split 80/10/10 без пересечений;
+- общий trace contract для COTIC, THP, NHP и RMTPP;
+- точное равенство Active и Pure при `alpha=0`;
+- нулевой KL одинаковых Wishart laws;
+- trace и objective exact `Omega` M-step;
+- один полный Wishart cycle через Lightning Fabric;
+- раздельный dispatch Pure и Wishart без запуска второй ветви;
+- пропуск alpha M-step при фиксированной `alpha`;
+- значения базового all-12 schedule.
+
+## Ссылки и происхождение кода
+
+- COTIC: <https://github.com/VladislavZh/COTIC>, изучавшийся commit
+  `362b8ab1f3cbb9e9dced2518e9daacf68235e77a`.
+- EasyTPP: <https://github.com/ant-research/EasyTemporalPointProcess>,
+  Apache-2.0; в окружении зафиксирован release `0.2.1`.
+- Lightning Fabric: <https://lightning.ai/docs/fabric/stable/>.
