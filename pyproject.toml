@@ -5,11 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "active-wishart-tpp"
 version = "0.1.0"
-description = "Readable COTIC mixtures with active-block Wishart random effects"
+description = "Direct Pure and Bartlett all-gradient Active Wishart temporal point processes"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
-  "easy-tpp==0.2.1",
   "lightning==2.6.1",
   "numpy>=2.0,<3",
   "pandas>=2.2,<3",
@@ -19,14 +18,17 @@ dependencies = [
 ]
 
 [project.scripts]
-wishart-tpp = "wishart_tpp.cli:main"
+wishart-tpp = "active_wishart_tpp.cli:main"
 
 [project.optional-dependencies]
 dev = ["ruff>=0.6"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["active_wishart_tpp*"]
+exclude = ["wishart_tpp*"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+extend-exclude = ["src/wishart_tpp", "tmp", "runs", "data"]

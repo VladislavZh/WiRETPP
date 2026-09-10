@@ -1,7 +1,0 @@
-parameterization,encoder_instances,has_independent_component_module_list,final_output_dimension,expected_output_dimension,maximum_pre_head_state_difference,cluster_specific_parameters,uses_random_walk,architecture,backbone_parameter_count
-output_split,1,False,15,15,0.0,K*C final output rows only,False,nhp,4113
-lal_fixed,1,False,5,5,,LaL initial state/BOS code; shared C-output head,False,nhp,4059
-output_split,1,False,15,15,0.0,K*C final output rows only,False,thp,11295
-lal_fixed,1,False,5,5,,LaL initial state/BOS code; shared C-output head,False,thp,11031
-output_split,1,False,15,15,0.0,K*C final output rows only,False,cotic,58345
-lal_fixed,1,False,5,5,,LaL initial state/BOS code; shared C-output head,False,cotic,57781

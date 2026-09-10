@@ -1,0 +1,9 @@
+runtime:
+  dataset: amazon
+  seed: 0
+  components: 5
+  split_protocol: deduplicated_validation_half
+  output_root: runs/paper_real
+training:
+  cycles: 60
+  population_df: 16

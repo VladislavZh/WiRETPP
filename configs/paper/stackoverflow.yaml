@@ -1,0 +1,16 @@
+# Requires the separately prepared leakage-free, grouped StackOverflow split.
+# The raw historical overlapping split must not be substituted here.
+runtime:
+  dataset: so
+  seed: 0
+  components: 5
+  data_root: data/real_unique_20260908
+  split_protocol: official
+  packed_filename: events.parquet
+  output_root: runs/paper_real
+training:
+  cycles: 60
+  population_df: 32
+compute:
+  physical_batch: 16
+  mc_draw_shard: 8

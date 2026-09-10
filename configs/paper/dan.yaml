@@ -1,0 +1,9 @@
+# Bartlett/all-gradient without temperature; Direct Pure uses the same neural LR.
+runtime:
+  dataset: K4_C5
+  seed: 0
+  components: 5
+  output_root: runs/paper_dan
+training:
+  cycles: 60
+  population_df: 32

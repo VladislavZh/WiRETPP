@@ -16,3 +16,33 @@ __pycache__/
 .pytest_cache/
 .coverage
 
+# Private research workspace; not part of the paper source distribution.
+/AGENTS.md
+/.agents/
+/preserved/
+/src/wishart_tpp/
+/baselines/
+
+# Only the reviewed paper configurations, documentation, scripts and tests ship.
+/configs/*
+!/configs/paper/
+/docs/*
+!/docs/paper/
+/scripts/*
+!/scripts/paper/
+/tests/*
+!/tests/paper/
+
+# Baseline implementations and their local experiment artifacts remain private.
+**/paper_baselines/
+**/ntpp_mix/
+**/*ntpp30*
+**/*ntpp_mix*
+**/*corrected_baseline*
+**/*corrected_paper_baseline*
+**/*corrected_st_gw*
+
+# Build outputs and distribution metadata.
+/build/
+/dist/
+
