@@ -23,13 +23,13 @@ __pycache__/
 /src/wishart_tpp/
 /baselines/
 
-# Only the reviewed paper configurations, documentation, scripts and tests ship.
+# Only paper configurations, scripts and tests ship.
 /configs/*
 !/configs/paper/
-/docs/*
-!/docs/paper/
+/docs/
 /scripts/*
 !/scripts/paper/
+/scripts/paper/audit*.py
 /tests/*
 !/tests/paper/
 
